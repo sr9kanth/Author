@@ -1,0 +1,27 @@
+version: "3.9"
+
+# Development override – uses hot-reload for backend and frontend
+services:
+  backend:
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      ENVIRONMENT: development
+
+  celery_worker:
+    volumes:
+      - ./backend:/app
+    command: celery -A app.workers.celery_app worker --loglevel=debug --concurrency=1
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: deps
+    command: npm run dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000

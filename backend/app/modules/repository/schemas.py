@@ -1,0 +1,27 @@
+import uuid
+from datetime import datetime
+
+from pydantic import BaseModel
+
+
+class AssessmentItemCreate(BaseModel):
+    model_config = {"from_attributes": True}
+
+    content_id: uuid.UUID
+    item_code: str | None = None
+    tags: list[str] = []
+    notes: str | None = None
+
+
+class AssessmentItemRead(AssessmentItemCreate):
+    id: uuid.UUID
+    usage_count: int
+    average_difficulty: float | None
+    created_by: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class AssessmentItemList(BaseModel):
+    items: list[AssessmentItemRead]
+    total: int
