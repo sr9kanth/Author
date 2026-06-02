@@ -16,11 +16,12 @@ class Settings(BaseSettings):
     AWS_BUCKET_NAME: str = ""
     AWS_ENDPOINT_URL: str = ""  # for MinIO
 
-    LITELLM_DEFAULT_MODEL: str = "claude-opus-4-8"
-    LITELLM_DEFAULT_PROVIDER: str = "anthropic"
+    LITELLM_DEFAULT_MODEL: str = "deepseek-chat"
+    LITELLM_DEFAULT_PROVIDER: str = "deepseek"
     ANTHROPIC_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
+    DEEPSEEK_API_KEY: str = ""
     OLLAMA_BASE_URL: str = "http://localhost:11434"
 
     ENVIRONMENT: str = "development"

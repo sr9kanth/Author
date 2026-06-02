@@ -22,6 +22,8 @@ class AIOrchestrationService:
             litellm.openai_key = settings.OPENAI_API_KEY
         if settings.GEMINI_API_KEY:
             litellm.gemini_key = settings.GEMINI_API_KEY
+        if settings.DEEPSEEK_API_KEY:
+            litellm.deepseek_key = settings.DEEPSEEK_API_KEY
 
     def _build_model_string(self, model: str | None, provider: str | None) -> str:
         effective_model = model or settings.LITELLM_DEFAULT_MODEL
@@ -32,6 +34,7 @@ class AIOrchestrationService:
             "openai": "",
             "gemini": "gemini/",
             "ollama": "ollama/",
+            "deepseek": "deepseek/",
         }
         prefix = provider_prefixes.get(effective_provider, "")
         if prefix and not effective_model.startswith(prefix):
@@ -92,6 +95,8 @@ class AIOrchestrationService:
             {"id": "gpt-4o-mini", "provider": "openai", "context_window": 128000},
             {"id": "gemini-1.5-pro", "provider": "gemini", "context_window": 1000000},
             {"id": "gemini-1.5-flash", "provider": "gemini", "context_window": 1000000},
+            {"id": "deepseek-chat", "provider": "deepseek", "context_window": 128000},
+            {"id": "deepseek-reasoner", "provider": "deepseek", "context_window": 128000},
             {"id": "llama3.2", "provider": "ollama", "context_window": 128000},
         ]
         return models

@@ -94,8 +94,8 @@ GENERATION_JOBS: dict[str, dict] = {
         "status": "completed",
         "configuration_id": "cfg-1",
         "knowledge_asset_ids": ["ka-1"],
-        "ai_provider": "anthropic",
-        "ai_model": "claude-opus-4-8",
+        "ai_provider": "deepseek",
+        "ai_model": "deepseek-chat",
         "prompt_version": "v1.2",
         "created_at": "2024-11-10T14:00:00Z",
         "completed_at": "2024-11-10T14:00:47Z",
@@ -120,8 +120,8 @@ CONTENT_ITEMS: dict[str, dict] = {
         "rationale": "Elimination and substitution sit at the top of the hierarchy of controls. Removing the defective tool from service eliminates the hazard immediately.",
         "framework_alignment": {"competency": "Hazard Identification", "skill": "Identify physical hazards"},
         "source_references": ["ka-1"],
-        "ai_provider": "anthropic",
-        "ai_model": "claude-opus-4-8",
+        "ai_provider": "deepseek",
+        "ai_model": "deepseek-chat",
         "validation_score": 0.94,
         "status": "approved",
     },
@@ -136,8 +136,8 @@ CONTENT_ITEMS: dict[str, dict] = {
         "rationale": "Section 19 of the Model WHS Act imposes a primary duty of care on the PCBU.",
         "framework_alignment": {"competency": "Risk Control", "skill": "Apply hierarchy of controls"},
         "source_references": ["ka-1"],
-        "ai_provider": "anthropic",
-        "ai_model": "claude-opus-4-8",
+        "ai_provider": "deepseek",
+        "ai_model": "deepseek-chat",
         "validation_score": 0.98,
         "status": "under_review",
     },
@@ -158,6 +158,7 @@ ASSESSMENTS: dict[str, dict] = {
 }
 
 AI_PROVIDERS = [
+    {"provider": "deepseek", "models": ["deepseek-chat", "deepseek-reasoner"], "status": "available"},
     {"provider": "anthropic", "models": ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"], "status": "available"},
     {"provider": "openai", "models": ["gpt-4o", "gpt-4o-mini"], "status": "available"},
     {"provider": "google", "models": ["gemini-1.5-pro", "gemini-1.5-flash"], "status": "available"},
@@ -174,8 +175,8 @@ class LoginRequest(BaseModel):
 class GenerateRequest(BaseModel):
     configuration_id: str
     knowledge_asset_ids: list[str]
-    ai_provider: str = "anthropic"
-    ai_model: str = "claude-opus-4-8"
+    ai_provider: str = "deepseek"
+    ai_model: str = "deepseek-chat"
 
 class ReviewAction(BaseModel):
     action: str  # approve | reject | request_changes
