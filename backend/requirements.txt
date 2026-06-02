@@ -10,7 +10,7 @@ passlib[bcrypt]==1.7.4
 python-multipart==0.0.12
 celery[redis]==5.4.0
 redis==5.1.1
-litellm==1.48.7
+litellm>=1.48.7
 boto3==1.35.30
 pgvector==0.3.3
 pypdf==5.0.1
