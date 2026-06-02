@@ -42,7 +42,7 @@ class GeneratedContentRead(BaseModel):
     job_id: uuid.UUID
     content_type: str
     body: str
-    metadata: dict[str, Any]
+    content_metadata: dict[str, Any]
     framework_alignment: dict[str, Any]
     source_references: list
     ai_provider: str

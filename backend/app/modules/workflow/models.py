@@ -54,7 +54,7 @@ class WorkflowEvent(Base):
     to_state: Mapped[WorkflowState] = mapped_column(Enum(WorkflowState), nullable=False)
     triggered_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    event_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     workflow: Mapped[ReviewWorkflow] = relationship("ReviewWorkflow", back_populates="events")

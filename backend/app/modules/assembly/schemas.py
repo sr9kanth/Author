@@ -13,7 +13,7 @@ class AssessmentPackageCreate(BaseModel):
     configuration_id: uuid.UUID | None = None
     item_ids: list[str] = []
     export_formats: list[str] = ["pdf"]
-    metadata: dict[str, Any] = {}
+    package_metadata: dict[str, Any] = {}
 
 
 class AssessmentPackageRead(AssessmentPackageCreate):

@@ -117,7 +117,7 @@ def run_generation_job(self, job_id: str) -> dict:
                             job_id=job.id,
                             content_type="question",
                             body=q.get("stem", ""),
-                            metadata=q,
+                            content_metadata=q,
                             framework_alignment=q.get("framework_alignment", {}),
                             source_references=[],
                             ai_provider=job.ai_provider,
@@ -168,7 +168,7 @@ def run_quality_validation(self, content_id: str) -> dict:
             report = await service.validate_content(
                 content_id=content_id,
                 content_text=content.body,
-                context=content.metadata or {},
+                context=content.content_metadata or {},
             )
             content.validation_score = report.overall_score
             await db.commit()

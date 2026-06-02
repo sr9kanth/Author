@@ -54,7 +54,7 @@ class GeneratedContent(Base):
     job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("generation_jobs.id"), nullable=False)
     content_type: Mapped[str] = mapped_column(String(100), nullable=False)  # question, answer, rationale
     body: Mapped[str] = mapped_column(Text, nullable=False)
-    metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    content_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     framework_alignment: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     source_references: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     ai_provider: Mapped[str] = mapped_column(String(100), nullable=False, default="anthropic")

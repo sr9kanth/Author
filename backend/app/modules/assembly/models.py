@@ -18,7 +18,7 @@ class AssessmentPackage(Base):
     configuration_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("assessment_configurations.id"), nullable=True)
     item_ids: Mapped[list] = mapped_column(JSON, nullable=False, default=list)  # ordered list of AssessmentItem UUIDs
     export_formats: Mapped[list] = mapped_column(JSON, nullable=False, default=list)  # e.g. ["pdf", "qti", "docx"]
-    metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    package_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="draft")
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
