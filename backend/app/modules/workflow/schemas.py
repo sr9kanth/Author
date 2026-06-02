@@ -1,13 +1,13 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.modules.workflow.models import WorkflowState
 
 
 class ReviewWorkflowRead(BaseModel):
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     content_id: uuid.UUID
@@ -23,7 +23,7 @@ class WorkflowTransitionRequest(BaseModel):
 
 
 class WorkflowEventRead(BaseModel):
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     workflow_id: uuid.UUID
@@ -39,7 +39,7 @@ class ReviewCommentCreate(BaseModel):
 
 
 class ReviewCommentRead(BaseModel):
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     workflow_id: uuid.UUID

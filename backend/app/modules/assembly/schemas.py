@@ -2,11 +2,11 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class AssessmentPackageCreate(BaseModel):
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
     name: str
     description: str | None = None
@@ -25,7 +25,7 @@ class AssessmentPackageRead(AssessmentPackageCreate):
 
 
 class AssessmentPackageUpdate(BaseModel):
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
     name: str | None = None
     description: str | None = None

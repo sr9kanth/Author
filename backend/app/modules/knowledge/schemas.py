@@ -1,13 +1,13 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, model_config
+from pydantic import BaseModel, ConfigDict
 
 from app.modules.knowledge.models import AssetStatus, ContentType
 
 
 class KnowledgeAssetCreate(BaseModel):
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
     title: str
     description: str | None = None
@@ -15,7 +15,7 @@ class KnowledgeAssetCreate(BaseModel):
 
 
 class KnowledgeAssetRead(BaseModel):
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     title: str
@@ -34,7 +34,7 @@ class KnowledgeAssetRead(BaseModel):
 
 
 class KnowledgeAssetUpdate(BaseModel):
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
     title: str | None = None
     description: str | None = None

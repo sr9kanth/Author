@@ -1,11 +1,11 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class LearningOutcomeCreate(BaseModel):
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
     statement: str
     bloom_level: str | None = None
     sort_order: int = 0
@@ -19,7 +19,7 @@ class LearningOutcomeRead(LearningOutcomeCreate):
 
 
 class SkillCreate(BaseModel):
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
     name: str
     description: str | None = None
     code: str | None = None
@@ -35,7 +35,7 @@ class SkillRead(SkillCreate):
 
 
 class CompetencyCreate(BaseModel):
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
     name: str
     description: str | None = None
     code: str | None = None
@@ -51,7 +51,7 @@ class CompetencyRead(CompetencyCreate):
 
 
 class DomainCreate(BaseModel):
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
     name: str
     description: str | None = None
     sort_order: int = 0
@@ -66,7 +66,7 @@ class DomainRead(DomainCreate):
 
 
 class FrameworkCreate(BaseModel):
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
     name: str
     description: str | None = None
     version: str = "1.0"

@@ -2,13 +2,13 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.modules.generation.models import ContentStatus, JobStatus
 
 
 class GenerationJobCreate(BaseModel):
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
     configuration_id: uuid.UUID | None = None
     knowledge_asset_ids: list[str] = []
@@ -19,7 +19,7 @@ class GenerationJobCreate(BaseModel):
 
 
 class GenerationJobRead(BaseModel):
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     status: JobStatus
@@ -36,7 +36,7 @@ class GenerationJobRead(BaseModel):
 
 
 class GeneratedContentRead(BaseModel):
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     job_id: uuid.UUID
@@ -55,7 +55,7 @@ class GeneratedContentRead(BaseModel):
 
 
 class GeneratedContentUpdate(BaseModel):
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
     body: str | None = None
     status: ContentStatus | None = None
