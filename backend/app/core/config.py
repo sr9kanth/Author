@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -6,6 +7,16 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "postgresql+asyncpg://aip:aip@localhost:5432/aip"
     REDIS_URL: str = "redis://localhost:6379/0"
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def fix_db_url(cls, v: str) -> str:
+        # Railway (and Heroku) provide postgres:// or postgresql:// — rewrite to asyncpg driver
+        if v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql+asyncpg://", 1)
+        if v.startswith("postgresql://"):
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
     SECRET_KEY: str = "changeme-use-openssl-rand-hex-32"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
