@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CARD } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/index";
@@ -8,16 +8,9 @@ import { Tag } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { INPUT_CLS } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { Sparkles, ChevronDown, Check, ClipboardCheck, CheckCircle } from "lucide-react";
-
-const FRAMEWORKS = [
-  { id: "fw-1", name: "Bloom's Taxonomy Alignment" },
-  { id: "fw-2", name: "Registered Nurse Competencies 2025" },
-  { id: "fw-3", name: "AP Biology — Unit Outcomes" },
-  { id: "fw-4", name: "ISTE Digital Literacy Standards" },
-  { id: "fw-5", name: "GCSE Mathematics Outcomes" },
-  { id: "fw-6", name: "CFA Level I — Ethics Module" },
-];
+import { frameworksApi, generationApi } from "@/lib/api";
+import { useAsync } from "@/lib/use-async";
+import { Sparkles, ChevronDown, Check, ClipboardCheck, CheckCircle, AlertCircle } from "lucide-react";
 
 const ITEM_TYPES = ["Multiple Choice", "Short Answer", "True / False", "Numeric Response", "Extended Response"];
 const DIFFICULTY = ["Easy", "Medium", "Hard"];
@@ -45,7 +38,14 @@ function Stepper({ value, onChange }: { value: number; onChange: (v: number) => 
 
 export default function GeneratePage() {
   const router = useRouter();
-  const [framework, setFramework] = useState(FRAMEWORKS[1].id);
+
+  const { data: fwData } = useAsync(() => frameworksApi.list(0, 100), []);
+  const FRAMEWORKS = useMemo(
+    () => (fwData?.items ?? []).map((f) => ({ id: f.id, name: f.name })),
+    [fwData],
+  );
+
+  const [framework, setFramework] = useState("");
   const [type, setType] = useState("Multiple Choice");
   const [count, setCount] = useState(25);
   const [difficulty, setDifficulty] = useState<Record<string, boolean>>({ Easy: true, Medium: true, Hard: false });
@@ -53,23 +53,43 @@ export default function GeneratePage() {
   const [creativity, setCreativity] = useState(40);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [failed, setFailed] = useState(false);
 
   const toggleBloom = (b: string) =>
     setBloom((arr) => (arr.includes(b) ? arr.filter((x) => x !== b) : [...arr, b]));
 
-  const run = () => {
+  const run = async () => {
     setRunning(true);
-    setProgress(0);
-    const iv = setInterval(() => {
-      setProgress((p) => {
-        if (p >= 100) { clearInterval(iv); return 100; }
-        return Math.min(100, p + Math.random() * 12 + 4);
+    setFailed(false);
+    setProgress(10);
+    try {
+      const job = await generationApi.createJob({
+        configuration_id: framework || undefined,
       });
-    }, 280);
+      setProgress(50);
+      // Poll until terminal state.
+      const poll = async (): Promise<void> => {
+        const current = await generationApi.getJob(job.id);
+        if (current.status === "completed") {
+          setProgress(100);
+          return;
+        }
+        if (current.status === "failed") {
+          setFailed(true);
+          return;
+        }
+        setProgress((p) => Math.min(90, Math.max(50, p)));
+        await new Promise((r) => setTimeout(r, 2000));
+        return poll();
+      };
+      await poll();
+    } catch {
+      setFailed(true);
+    }
   };
 
   const fw = FRAMEWORKS.find((f) => f.id === framework) || FRAMEWORKS[0];
-  const done = running && progress >= 100;
+  const done = running && progress >= 100 && !failed;
   const creativityLabel = creativity < 33 ? "Conservative" : creativity < 66 ? "Balanced" : "Exploratory";
 
   return (
@@ -87,6 +107,7 @@ export default function GeneratePage() {
             <Field label="Target framework" hint="Items will be aligned to this framework's learning outcomes.">
               <div className="relative">
                 <select value={framework} onChange={(e) => setFramework(e.target.value)} className={cn(INPUT_CLS, "appearance-none pr-10")}>
+                  <option value="">Select a framework…</option>
                   {FRAMEWORKS.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
                 </select>
                 <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
@@ -153,7 +174,7 @@ export default function GeneratePage() {
           <div className={cn(CARD, "p-5 sticky top-20")}>
             <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-4">Job summary</h3>
             <dl className="space-y-3 text-[13px]">
-              <div className="flex justify-between gap-3"><dt className="text-stone-500 dark:text-stone-400">Framework</dt><dd className="font-medium text-stone-900 dark:text-white text-right">{fw.name}</dd></div>
+              <div className="flex justify-between gap-3"><dt className="text-stone-500 dark:text-stone-400">Framework</dt><dd className="font-medium text-stone-900 dark:text-white text-right">{fw?.name ?? "—"}</dd></div>
               <div className="flex justify-between"><dt className="text-stone-500 dark:text-stone-400">Type</dt><dd className="font-medium text-stone-900 dark:text-white">{type}</dd></div>
               <div className="flex justify-between"><dt className="text-stone-500 dark:text-stone-400">Items</dt><dd className="font-medium text-stone-900 dark:text-white tabular-nums">{count}</dd></div>
               <div className="flex justify-between gap-3"><dt className="text-stone-500 dark:text-stone-400">Difficulty</dt><dd className="font-medium text-stone-900 dark:text-white text-right">{Object.keys(difficulty).filter((k) => difficulty[k]).join(", ") || "—"}</dd></div>
@@ -165,7 +186,14 @@ export default function GeneratePage() {
               <span className="font-semibold text-stone-900 dark:text-white tabular-nums">{count * 2}</span>
             </div>
             {!running && <Button Icon={Sparkles} className="w-full" size="lg" onClick={run}>Generate {count} items</Button>}
-            {running && !done && (
+            {running && failed && (
+              <div className="text-center space-y-3">
+                <div className="mx-auto w-12 h-12 rounded-full bg-rose-50 dark:bg-rose-500/15 text-rose-500 flex items-center justify-center"><AlertCircle size={24} /></div>
+                <p className="text-sm font-medium text-stone-900 dark:text-white">Generation failed</p>
+                <button onClick={() => { setRunning(false); setProgress(0); setFailed(false); }} className="text-xs text-stone-400 hover:text-stone-600 dark:hover:text-stone-300">Try again</button>
+              </div>
+            )}
+            {running && !failed && !done && (
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between text-[12.5px]">
                   <span className="inline-flex items-center gap-1.5 text-violet-600 dark:text-violet-300 font-medium"><Sparkles size={14} className="animate-pulse" /> Generating…</span>

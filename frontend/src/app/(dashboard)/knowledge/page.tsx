@@ -1,14 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
 import { CARD } from "@/components/ui/card";
-import { PageHeader, FileUploadZone } from "@/components/ui/index";
+import { PageHeader, EmptyState, FileUploadZone } from "@/components/ui/index";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Settings, FileText, RefreshCw, Trash2, Sparkles } from "lucide-react";
+import { knowledgeApi } from "@/lib/api";
+import { useAsync } from "@/lib/use-async";
+import type { KnowledgeAsset } from "@/types";
+import { Settings, FileText, RefreshCw, Trash2, Sparkles, Database } from "lucide-react";
 
-type AssetStatus = "indexed" | "processing" | "failed";
+type DisplayStatus = "indexed" | "processing" | "failed";
 
 interface Asset {
   id: string;
@@ -16,18 +19,33 @@ interface Asset {
   type: string;
   size: string;
   chunks: number;
-  status: AssetStatus;
+  status: DisplayStatus;
   uploaded: string;
 }
 
-const INITIAL_ASSETS: Asset[] = [
-  { id: "k-1", name: "Anatomy_&_Physiology_Ch7_Cardiovascular.pdf", type: "PDF", size: "8.4 MB", chunks: 642, status: "indexed", uploaded: "2026-05-30" },
-  { id: "k-2", name: "Nursing_Pharmacology_Lecture_Notes.docx", type: "DOCX", size: "2.1 MB", chunks: 188, status: "indexed", uploaded: "2026-05-30" },
-  { id: "k-3", name: "AP_Biology_Cell_Division_Slides.pptx", type: "PPTX", size: "14.7 MB", chunks: 0, status: "processing", uploaded: "2026-05-31" },
-  { id: "k-4", name: "Clinical_Guidelines_Hypertension_2025.pdf", type: "PDF", size: "5.9 MB", chunks: 410, status: "indexed", uploaded: "2026-05-28" },
-  { id: "k-5", name: "Statistics_Probability_Workbook.pdf", type: "PDF", size: "3.2 MB", chunks: 0, status: "failed", uploaded: "2026-05-27" },
-  { id: "k-6", name: "Medical_Ethics_Casebook_Vol2.epub", type: "EPUB", size: "1.8 MB", chunks: 256, status: "indexed", uploaded: "2026-05-25" },
-];
+function fmtSize(bytes: number | null): string {
+  if (!bytes || bytes <= 0) return "—";
+  const units = ["B", "KB", "MB", "GB"];
+  let v = bytes;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+function displayStatus(s: KnowledgeAsset["status"]): DisplayStatus {
+  if (s === "processed") return "indexed";
+  if (s === "failed") return "failed";
+  return "processing";
+}
+
+function chunkCount(a: KnowledgeAsset): number {
+  const topics = a.extracted_topics;
+  if (topics && typeof topics === "object") return Object.keys(topics).length;
+  return 0;
+}
 
 function typeStyle(t: string) {
   const m: Record<string, string> = {
@@ -40,32 +58,31 @@ function typeStyle(t: string) {
 }
 
 export default function KnowledgePage() {
-  const [assets, setAssets] = useState<Asset[]>(INITIAL_ASSETS);
+  const { data, loading, error, reload } = useAsync(() => knowledgeApi.list(0, 100), []);
 
-  const onFiles = (names: string[]) => {
-    const now = new Date().toISOString().slice(0, 10);
-    const added: Asset[] = names.map((name, i) => ({
-      id: `new-${Date.now()}-${i}`,
-      name,
-      type: (name.split(".").pop() || "FILE").toUpperCase().slice(0, 4),
-      size: `${(Math.random() * 8 + 1).toFixed(1)} MB`,
-      chunks: 0,
-      status: "processing",
-      uploaded: now,
-    }));
-    setAssets((a) => [...added, ...a]);
-    added.forEach((f, idx) => {
-      setTimeout(() => {
-        setAssets((a) =>
-          a.map((x) =>
-            x.id === f.id ? { ...x, status: "indexed" as AssetStatus, chunks: Math.floor(Math.random() * 400 + 80) } : x,
-          ),
-        );
-      }, 2600 + idx * 700);
-    });
+  const assets: Asset[] = useMemo(
+    () =>
+      (data?.items ?? []).map((a) => ({
+        id: a.id,
+        name: a.title,
+        type: a.content_type.toUpperCase().slice(0, 4),
+        size: fmtSize(a.file_size),
+        chunks: chunkCount(a),
+        status: displayStatus(a.status),
+        uploaded: a.created_at,
+      })),
+    [data],
+  );
+
+  const onFiles = () => {
+    // Upload handled elsewhere; refresh the list once files are queued.
+    reload();
   };
 
-  const remove = (id: string) => setAssets((a) => a.filter((x) => x.id !== id));
+  const remove = async (id: string) => {
+    await knowledgeApi.delete(id);
+    reload();
+  };
 
   const totals = {
     indexed: assets.filter((a) => a.status === "indexed").length,
@@ -94,6 +111,13 @@ export default function KnowledgePage() {
                 <RefreshCw size={13} /> Re-index all
               </button>
             </div>
+            {loading ? (
+              <div className="py-16 text-center text-sm text-stone-400 dark:text-stone-500">Loading sources…</div>
+            ) : error ? (
+              <EmptyState Icon={Database} title="Couldn't load sources" subtext={error} />
+            ) : assets.length === 0 ? (
+              <EmptyState Icon={Database} title="No sources yet" subtext="Upload documents to build your knowledge base. Indexed material is chunked and embedded for retrieval." />
+            ) : (
             <ul>
               {assets.map((a) => (
                 <li
@@ -132,6 +156,7 @@ export default function KnowledgePage() {
                 </li>
               ))}
             </ul>
+            )}
           </div>
         </div>
 

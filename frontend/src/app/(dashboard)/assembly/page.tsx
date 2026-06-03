@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { CARD } from "@/components/ui/card";
-import { PageHeader } from "@/components/ui/index";
+import { PageHeader, EmptyState } from "@/components/ui/index";
 import { Tag } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { repositoryApi, assemblyApi } from "@/lib/api";
+import { useAsync } from "@/lib/use-async";
 import { Eye, Package, Download, Check, GripVertical, X, Plus } from "lucide-react";
 
 interface Item {
@@ -16,36 +18,54 @@ interface Item {
   difficulty: string;
 }
 
-const REPOSITORY: Item[] = [
-  { id: "rp-1", stem: "Which ion is primarily responsible for the depolarisation phase of a cardiac action potential?", type: "Multiple Choice", bloom: "Remember", difficulty: "Medium" },
-  { id: "rp-2", stem: "Calculate the IV flow rate (mL/hr) for 1000 mL of saline to be infused over 8 hours.", type: "Numeric", bloom: "Apply", difficulty: "Medium" },
-  { id: "rp-3", stem: "Explain how negative feedback maintains blood glucose homeostasis.", type: "Short Answer", bloom: "Understand", difficulty: "Hard" },
-  { id: "rp-4", stem: "Identify the stage of mitosis shown in the micrograph.", type: "Multiple Choice", bloom: "Analyze", difficulty: "Medium" },
-  { id: "rp-5", stem: "A portfolio manager front-runs a client order. Which Standard is violated?", type: "Multiple Choice", bloom: "Apply", difficulty: "Hard" },
-  { id: "rp-6", stem: "Factorise completely: 2x² + 7x + 3.", type: "Short Answer", bloom: "Apply", difficulty: "Medium" },
-  { id: "rp-7", stem: "Define the term \"construct validity\" in the context of assessment design.", type: "Short Answer", bloom: "Remember", difficulty: "Easy" },
-  { id: "rp-8", stem: "Which intervention best reduces the risk of pressure injury in an immobile patient?", type: "Multiple Choice", bloom: "Evaluate", difficulty: "Medium" },
-  { id: "rp-9", stem: "Interpret the slope of a velocity–time graph for an object in free fall.", type: "Multiple Choice", bloom: "Analyze", difficulty: "Hard" },
-  { id: "rp-10", stem: "List two ethical considerations when using AI to generate exam content.", type: "Short Answer", bloom: "Evaluate", difficulty: "Medium" },
-  { id: "rp-11", stem: "A patient's ABG shows pH 7.31, PaCO₂ 52. Classify the acid–base disturbance.", type: "Multiple Choice", bloom: "Analyze", difficulty: "Hard" },
-  { id: "rp-12", stem: "Convert 0.75 to a fraction in its simplest form.", type: "Numeric", bloom: "Remember", difficulty: "Easy" },
-];
-
 function diffTone(d: string) {
   return d === "Easy" ? "text-emerald-600 dark:text-emerald-400" : d === "Medium" ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400";
 }
 
 export default function AssemblyPage() {
-  const [pkg, setPkg] = useState<Item[]>([REPOSITORY[1], REPOSITORY[3], REPOSITORY[7]]);
+  const { data, loading, error } = useAsync(() => repositoryApi.list(0, 100), []);
+
+  const REPOSITORY: Item[] = useMemo(
+    () =>
+      (data?.items ?? []).map((r) => ({
+        id: r.id,
+        stem: r.stem ?? r.item_code,
+        type: r.type ?? "Item",
+        bloom: r.bloom ?? "—",
+        difficulty: r.difficulty ?? "—",
+      })),
+    [data],
+  );
+
+  const [pkg, setPkg] = useState<Item[]>([]);
   const [overPkg, setOverPkg] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [reorderIdx, setReorderIdx] = useState<number | null>(null);
+  const [pkgName, setPkgName] = useState("Untitled package");
+  const [publishing, setPublishing] = useState(false);
+  const [published, setPublished] = useState(false);
 
   const inPkg = (id: string) => pkg.some((p) => p.id === id);
 
   const addItem = (id: string) => {
     const item = REPOSITORY.find((p) => p.id === id);
     if (item && !inPkg(id)) setPkg((p) => [...p, item]);
+  };
+
+  const publish = async () => {
+    if (pkg.length === 0) return;
+    setPublishing(true);
+    setPublished(false);
+    try {
+      await assemblyApi.create({
+        name: pkgName || "Untitled package",
+        item_ids: pkg.map((p) => p.id),
+        export_formats: ["pdf"],
+      });
+      setPublished(true);
+    } finally {
+      setPublishing(false);
+    }
   };
   const removeItem = (id: string) => setPkg((p) => p.filter((x) => x.id !== id));
 
@@ -101,8 +121,16 @@ export default function AssemblyPage() {
         description="Drag approved items from the bank into a package to build an exam or assessment form."
       >
         <Button variant="secondary" Icon={Eye}>Preview</Button>
-        <Button Icon={Package}>Publish package</Button>
+        <Button Icon={Package} onClick={publish} disabled={publishing || pkg.length === 0}>
+          {publishing ? "Publishing…" : "Publish package"}
+        </Button>
       </PageHeader>
+
+      {published && (
+        <div className="mb-4 rounded-xl border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 px-4 py-3 text-[13px] font-medium text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-2">
+          <Check size={16} /> Package published.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_minmax(360px,440px)] gap-6">
         {/* LEFT: item bank */}
@@ -115,6 +143,13 @@ export default function AssemblyPage() {
               <GripVertical size={14} /> Drag items into the package →
             </span>
           </div>
+          {loading ? (
+            <div className={cn(CARD, "py-16 text-center text-sm text-stone-400 dark:text-stone-500")}>Loading items…</div>
+          ) : error ? (
+            <div className={CARD}><EmptyState Icon={Package} title="Couldn't load item bank" subtext={error} /></div>
+          ) : REPOSITORY.length === 0 ? (
+            <div className={CARD}><EmptyState Icon={Package} title="No items available" subtext="Approve assessment items to build packages from them." /></div>
+          ) : (
           <div className="grid sm:grid-cols-2 gap-3">
             {REPOSITORY.map((r) => {
               const added = inPkg(r.id);
@@ -151,6 +186,7 @@ export default function AssemblyPage() {
               );
             })}
           </div>
+          )}
         </div>
 
         {/* RIGHT: package drop zone */}
@@ -161,7 +197,9 @@ export default function AssemblyPage() {
           >
             <div className="p-5 border-b border-stone-100 dark:border-white/[0.05]">
               <input
-                defaultValue="Cardiovascular Nursing — Midterm A"
+                value={pkgName}
+                onChange={(e) => setPkgName(e.target.value)}
+                placeholder="Package name"
                 className="w-full bg-transparent text-base font-semibold text-stone-900 dark:text-white focus:outline-none placeholder:text-stone-400"
               />
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
@@ -229,7 +267,9 @@ export default function AssemblyPage() {
                 <button onClick={() => setPkg([])} className="text-[12.5px] text-stone-400 hover:text-rose-500 transition">Clear all</button>
                 <div className="flex-1" />
                 <Button variant="secondary" size="sm" Icon={Download}>Export</Button>
-                <Button size="sm" Icon={Check}>Finalise</Button>
+                <Button size="sm" Icon={Check} onClick={publish} disabled={publishing}>
+                  {publishing ? "…" : "Finalise"}
+                </Button>
               </div>
             )}
           </div>

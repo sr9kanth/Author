@@ -1,12 +1,17 @@
 import { clearTokens, getAccessToken, getRefreshToken, isTokenExpired, setTokens } from "@/lib/auth";
 import type {
+  ActivityItem,
   AssessmentConfiguration,
+  AssessmentItem,
+  AssessmentPackage,
+  DashboardStats,
   Framework,
   GeneratedContent,
   GenerationJob,
   KnowledgeAsset,
   PaginatedList,
   User,
+  ValidationResult,
 } from "@/types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -134,6 +139,46 @@ export const generationApi = {
     request<GenerationJob>("/generation/jobs", { method: "POST", body: JSON.stringify(data) }),
   listContents: (jobId: string) =>
     request<PaginatedList<GeneratedContent>>(`/generation/jobs/${jobId}/contents`),
+  updateContent: (id: string, data: { status?: string; body?: string }) =>
+    request<GeneratedContent>(`/generation/contents/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+};
+
+// ---- Dashboard ----
+export const dashboardApi = {
+  stats: () => request<DashboardStats>("/dashboard/stats"),
+  activity: (limit = 10) =>
+    request<PaginatedList<ActivityItem>>(`/dashboard/activity?limit=${limit}`),
+};
+
+// ---- Repository ----
+export const repositoryApi = {
+  list: (skip = 0, limit = 20) =>
+    request<PaginatedList<AssessmentItem>>(`/repository?skip=${skip}&limit=${limit}`),
+  get: (id: string) => request<AssessmentItem>(`/repository/${id}`),
+};
+
+// ---- Assembly ----
+export const assemblyApi = {
+  list: (skip = 0, limit = 20) =>
+    request<PaginatedList<AssessmentPackage>>(`/assembly?skip=${skip}&limit=${limit}`),
+  get: (id: string) => request<AssessmentPackage>(`/assembly/${id}`),
+  create: (data: {
+    name: string;
+    description?: string;
+    configuration_id?: string;
+    item_ids: string[];
+    export_formats?: string[];
+    package_metadata?: Record<string, unknown>;
+  }) => request<AssessmentPackage>("/assembly", { method: "POST", body: JSON.stringify(data) }),
+};
+
+// ---- Quality ----
+export const qualityApi = {
+  getForContent: (contentId: string) =>
+    request<ValidationResult[]>(`/quality/content/${contentId}`),
 };
 
 export { ApiError };

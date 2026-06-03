@@ -1,12 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { CARD } from "@/components/ui/card";
-import { PageHeader, Segmented } from "@/components/ui/index";
+import { PageHeader, EmptyState, Segmented } from "@/components/ui/index";
 import { StatusBadge, Tag } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Download, Pencil, RefreshCw, X, Check, AlertCircle, BookOpen, Target } from "lucide-react";
+import { generationApi } from "@/lib/api";
+import { useAsync } from "@/lib/use-async";
+import type { GeneratedContent } from "@/types";
+import { Download, Pencil, RefreshCw, X, Check, AlertCircle, BookOpen, Target, ClipboardCheck } from "lucide-react";
 
 interface ReviewItem {
   id: string;
@@ -22,58 +26,72 @@ interface ReviewItem {
   flags: number;
 }
 
-const REVIEW_ITEMS: ReviewItem[] = [
-  {
-    id: "it-1", type: "Multiple Choice", status: "generated", bloom: "Apply", difficulty: "Medium",
-    framework: "Registered Nurse Competencies 2025", outcome: "Calculate safe medication dosages",
-    stem: "A patient is prescribed 250 mg of a drug available as 125 mg / 5 mL oral suspension. How many millilitres should the nurse administer per dose?",
-    options: [{ t: "5 mL", correct: false }, { t: "10 mL", correct: true }, { t: "12.5 mL", correct: false }, { t: "2.5 mL", correct: false }],
-    rationale: "Using the formula (desired ÷ available) × volume: (250 ÷ 125) × 5 = 10 mL.", flags: 1,
-  },
-  {
-    id: "it-2", type: "Multiple Choice", status: "generated", bloom: "Understand", difficulty: "Easy",
-    framework: "AP Biology — Unit Outcomes", outcome: "Describe the phases of mitosis",
-    stem: "During which phase of mitosis do sister chromatids separate and move toward opposite poles of the cell?",
-    options: [{ t: "Prophase", correct: false }, { t: "Metaphase", correct: false }, { t: "Anaphase", correct: true }, { t: "Telophase", correct: false }],
-    rationale: "Anaphase is defined by the separation of sister chromatids, which are pulled to opposite poles by spindle fibres.", flags: 0,
-  },
-  {
-    id: "it-3", type: "Short Answer", status: "validated", bloom: "Analyze", difficulty: "Hard",
-    framework: "Registered Nurse Competencies 2025", outcome: "Interpret abnormal vital signs",
-    stem: "A post-operative patient presents with BP 88/54, HR 122, and RR 24. Identify the most likely clinical concern and one immediate nursing action.",
-    options: [],
-    rationale: "Findings are consistent with hypovolaemic shock; an appropriate immediate action is to increase IV fluids and notify the provider.", flags: 0,
-  },
-  {
-    id: "it-4", type: "Multiple Choice", status: "generated", bloom: "Remember", difficulty: "Easy",
-    framework: "CFA Level I — Ethics Module", outcome: "Recall the Standards of Professional Conduct",
-    stem: "Under the CFA Institute Standards, accepting a gift from a client that could affect objectivity is primarily a violation of which standard?",
-    options: [{ t: "Loyalty, Prudence, and Care", correct: false }, { t: "Independence and Objectivity", correct: true }, { t: "Material Nonpublic Information", correct: false }, { t: "Fair Dealing", correct: false }],
-    rationale: "Gifts that may compromise objectivity fall under Standard I(B) — Independence and Objectivity.", flags: 2,
-  },
-  {
-    id: "it-5", type: "Multiple Choice", status: "generated", bloom: "Evaluate", difficulty: "Hard",
-    framework: "Clinical Guidelines: Hypertension", outcome: "Evaluate first-line antihypertensive therapy",
-    stem: "For a 54-year-old patient with stage 2 hypertension and type 2 diabetes, which initial pharmacologic class is most strongly indicated?",
-    options: [{ t: "Beta-blocker", correct: false }, { t: "ACE inhibitor", correct: true }, { t: "Loop diuretic", correct: false }, { t: "Alpha-blocker", correct: false }],
-    rationale: "ACE inhibitors are preferred first-line in patients with diabetes due to renoprotective effects.", flags: 0,
-  },
-  {
-    id: "it-6", type: "Multiple Choice", status: "draft", bloom: "Understand", difficulty: "Medium",
-    framework: "GCSE Mathematics Outcomes", outcome: "Solve linear equations",
-    stem: "Solve for x: 3(x − 4) = 2x + 5.",
-    options: [{ t: "x = 7", correct: false }, { t: "x = 17", correct: true }, { t: "x = 11", correct: false }, { t: "x = 1", correct: false }],
-    rationale: "3x − 12 = 2x + 5 → x = 17.", flags: 0,
-  },
-];
+function metaStr(meta: Record<string, unknown>, key: string): string {
+  const v = meta?.[key];
+  return typeof v === "string" ? v : "";
+}
+
+function toReviewItem(c: GeneratedContent): ReviewItem {
+  const meta = c.content_metadata ?? {};
+  const fw = c.framework_alignment ?? {};
+  const rawOptions = meta.options;
+  const options: { t: string; correct: boolean }[] = Array.isArray(rawOptions)
+    ? rawOptions.map((o) => {
+        if (o && typeof o === "object") {
+          const obj = o as Record<string, unknown>;
+          return {
+            t: typeof obj.text === "string" ? obj.text : String(obj.t ?? ""),
+            correct: Boolean(obj.correct),
+          };
+        }
+        return { t: String(o), correct: false };
+      })
+    : [];
+  return {
+    id: c.id,
+    type: c.content_type || "Item",
+    status: c.status,
+    bloom: metaStr(meta, "bloom"),
+    difficulty: metaStr(meta, "difficulty"),
+    framework: metaStr(fw, "framework_name") || metaStr(fw, "name"),
+    outcome: metaStr(fw, "outcome") || metaStr(meta, "outcome"),
+    stem: metaStr(meta, "stem") || c.body,
+    options,
+    rationale: metaStr(meta, "rationale"),
+    flags: typeof meta.flags === "number" ? meta.flags : 0,
+  };
+}
 
 export default function ReviewPage() {
-  const [items, setItems] = useState<ReviewItem[]>(REVIEW_ITEMS);
-  const [activeId, setActiveId] = useState(REVIEW_ITEMS[0].id);
+  return (
+    <Suspense fallback={<div className="py-16 text-center text-sm text-stone-400 dark:text-stone-500">Loading…</div>}>
+      <ReviewPageInner />
+    </Suspense>
+  );
+}
+
+function ReviewPageInner() {
+  const searchParams = useSearchParams();
+  const jobId = searchParams.get("job");
+
+  const { data, loading, error, reload } = useAsync(
+    () => (jobId ? generationApi.listContents(jobId) : Promise.resolve(null)),
+    [jobId],
+  );
+
+  const fetched = useMemo(() => (data?.items ?? []).map(toReviewItem), [data]);
+
+  const [items, setItems] = useState<ReviewItem[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [filter, setFilter] = useState("all");
   const [toast, setToast] = useState<string | null>(null);
 
-  const active = items.find((i) => i.id === activeId) || items[0];
+  useEffect(() => {
+    setItems(fetched);
+    setActiveId(fetched[0]?.id ?? null);
+  }, [fetched]);
+
+  const active = items.find((i) => i.id === activeId) ?? items[0] ?? null;
   const visible = items.filter((i) => filter === "all" || i.status === filter);
 
   const setStatus = (id: string, status: string) =>
@@ -84,18 +102,66 @@ export default function ReviewPage() {
     setTimeout(() => setToast(null), 2200);
   };
 
-  const approve = () => {
+  const approve = async () => {
+    if (!active) return;
     setStatus(active.id, "approved");
     notify("Item approved");
     const idx = visible.findIndex((i) => i.id === active.id);
     const next = visible[idx + 1] || visible[idx - 1];
     if (next) setActiveId(next.id);
+    try {
+      await generationApi.updateContent(active.id, { status: "approved" });
+    } catch {
+      notify("Failed to save — reloading");
+      reload();
+    }
+  };
+
+  const reject = async () => {
+    if (!active) return;
+    setStatus(active.id, "draft");
+    notify("Sent back to draft");
+    try {
+      await generationApi.updateContent(active.id, { status: "draft" });
+    } catch {
+      notify("Failed to save — reloading");
+      reload();
+    }
   };
 
   const counts = ["draft", "generated", "validated", "approved"].reduce(
     (m, s) => { m[s] = items.filter((i) => i.status === s).length; return m; },
     {} as Record<string, number>,
   );
+
+  if (!jobId || (!loading && items.length === 0)) {
+    return (
+      <div>
+        <PageHeader
+          title="Review"
+          description="Validate, edit and approve generated items before they enter the repository."
+        >
+          <Button variant="secondary" Icon={Download}>Export queue</Button>
+        </PageHeader>
+        <div className={CARD}>
+          <EmptyState
+            Icon={ClipboardCheck}
+            title={error ? "Couldn't load review queue" : "Nothing to review"}
+            subtext={error ?? "Run a generation job, then open its review queue to validate and approve items."}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (loading || !active) {
+    return (
+      <div>
+        <PageHeader title="Review" description="Validate, edit and approve generated items before they enter the repository." />
+        <div className={cn(CARD, "py-16 text-center text-sm text-stone-400 dark:text-stone-500")}>Loading review queue…</div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -213,7 +279,7 @@ export default function ReviewPage() {
               <Button variant="ghost" Icon={Pencil} size="md">Edit</Button>
               <Button variant="ghost" Icon={RefreshCw} size="md" className="hidden sm:inline-flex">Regenerate</Button>
               <div className="flex-1" />
-              <Button variant="secondary" Icon={X} onClick={() => { setStatus(active.id, "draft"); notify("Sent back to draft"); }}>Reject</Button>
+              <Button variant="secondary" Icon={X} onClick={reject}>Reject</Button>
               <Button Icon={Check} onClick={approve}>Approve</Button>
             </div>
           </div>

@@ -4,16 +4,26 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge, Tag } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { generationApi } from "@/lib/api";
+import { useAsync } from "@/lib/use-async";
 import type { GeneratedContent } from "@/types";
 
-// Placeholder – in production this would fetch from /api/v1/generation or workflow endpoints
-const mockItems: GeneratedContent[] = [];
-
-export default function ReviewPanel() {
+export default function ReviewPanel({ jobId }: { jobId?: string }) {
   const [selected, setSelected] = useState<GeneratedContent | null>(null);
   const [comment, setComment] = useState("");
 
-  if (mockItems.length === 0) {
+  const { data, reload } = useAsync(
+    () => (jobId ? generationApi.listContents(jobId) : Promise.resolve(null)),
+    [jobId],
+  );
+  const items = data?.items ?? [];
+
+  const updateStatus = async (id: string, status: string) => {
+    await generationApi.updateContent(id, { status });
+    reload();
+  };
+
+  if (items.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -32,7 +42,7 @@ export default function ReviewPanel() {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Item list */}
       <div className="lg:col-span-1 space-y-3">
-        {mockItems.map((item) => (
+        {items.map((item) => (
           <div
             key={item.id}
             className={`cursor-pointer transition-shadow hover:shadow-md rounded-lg border bg-white ${selected?.id === item.id ? "ring-2 ring-brand-500" : ""}`}
@@ -85,13 +95,13 @@ export default function ReviewPanel() {
               </div>
 
               <div className="flex gap-3">
-                <Button variant="primary" size="sm">
+                <Button variant="primary" size="sm" onClick={() => updateStatus(selected.id, "approved")}>
                   Approve
                 </Button>
-                <Button variant="secondary" size="sm">
+                <Button variant="secondary" size="sm" onClick={() => updateStatus(selected.id, "draft")}>
                   Request Changes
                 </Button>
-                <Button variant="danger" size="sm">
+                <Button variant="danger" size="sm" onClick={() => updateStatus(selected.id, "draft")}>
                   Reject
                 </Button>
               </div>

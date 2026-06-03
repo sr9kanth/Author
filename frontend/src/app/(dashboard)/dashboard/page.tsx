@@ -1,31 +1,42 @@
 "use client";
 
 import { CARD } from "@/components/ui/card";
-import { StatsCard, PageHeader } from "@/components/ui/index";
-import { StatusBadge, Tag } from "@/components/ui/badge";
+import { StatsCard, PageHeader, EmptyState } from "@/components/ui/index";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
+import { dashboardApi } from "@/lib/api";
+import { useAsync } from "@/lib/use-async";
 import {
   Layers, FileText, ClipboardCheck, CheckCircle,
   TrendingUp, Upload, Sparkles, Package, ArrowRight,
-  CheckCircle2, AlertCircle,
+  CheckCircle2, AlertCircle, Activity as ActivityIcon,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-const ACTIVITY = [
-  { action: "approved 12 items in", target: "Registered Nurse Competencies 2025", Icon: CheckCircle2, tint: "text-emerald-500", when: "14 min ago" },
-  { action: "started a generation job for", target: "GCSE Mathematics Outcomes", Icon: Sparkles, tint: "text-violet-500", when: "1 hr ago" },
-  { action: "uploaded", target: "Clinical_Guidelines_Hypertension_2025.pdf", Icon: Upload, tint: "text-indigo-500", when: "3 hr ago" },
-  { action: "published", target: "AP Biology — Unit 4 package", Icon: Package, tint: "text-sky-500", when: "5 hr ago" },
-  { action: "flagged 2 items for review in", target: "CFA Level I — Ethics Module", Icon: AlertCircle, tint: "text-amber-500", when: "Yesterday" },
-  { action: "created framework", target: "OSHA Workplace Safety Cert.", Icon: Layers, tint: "text-indigo-500", when: "Yesterday" },
-];
+function activityVisual(kind: string): { Icon: LucideIcon; tint: string } {
+  const k = kind.toLowerCase();
+  if (k.includes("approve")) return { Icon: CheckCircle2, tint: "text-emerald-500" };
+  if (k.includes("generat")) return { Icon: Sparkles, tint: "text-violet-500" };
+  if (k.includes("upload") || k.includes("knowledge")) return { Icon: Upload, tint: "text-indigo-500" };
+  if (k.includes("publish") || k.includes("package") || k.includes("assembl")) return { Icon: Package, tint: "text-sky-500" };
+  if (k.includes("flag") || k.includes("review")) return { Icon: AlertCircle, tint: "text-amber-500" };
+  if (k.includes("framework")) return { Icon: Layers, tint: "text-indigo-500" };
+  return { Icon: ActivityIcon, tint: "text-stone-500" };
+}
 
-const REVIEW_PREVIEW = [
-  { id: "1", type: "Multiple Choice", status: "generated", stem: "A patient is prescribed 250 mg of a drug available as 125 mg / 5 mL oral suspension. How many mL should be administered?" },
-  { id: "2", type: "Multiple Choice", status: "generated", stem: "During which phase of mitosis do sister chromatids separate and move toward opposite poles of the cell?" },
-  { id: "3", type: "Short Answer", status: "validated", stem: "A post-operative patient presents with BP 88/54, HR 122, and RR 24. Identify the most likely clinical concern." },
-];
+function timeAgo(iso: string) {
+  const then = new Date(iso).getTime();
+  if (isNaN(then)) return "";
+  const diff = Math.max(0, Date.now() - then);
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hr ago`;
+  const days = Math.floor(hrs / 24);
+  return days === 1 ? "Yesterday" : `${days} days ago`;
+}
 
 const data = [38, 52, 41, 67, 59, 78, 71, 90, 84, 96, 88, 104];
 const max = Math.max(...data);
@@ -48,6 +59,11 @@ function MiniBars() {
 export default function DashboardPage() {
   const router = useRouter();
 
+  const { data: stats, loading: statsLoading } = useAsync(() => dashboardApi.stats(), []);
+  const { data: activity, loading: activityLoading } = useAsync(() => dashboardApi.activity(10), []);
+
+  const activityItems = activity?.items ?? [];
+
   const quickActions = [
     { icon: Layers, accent: "from-indigo-500 to-indigo-600", title: "New framework", desc: "Define outcomes & competencies", href: "/frameworks" },
     { icon: Upload, accent: "from-sky-500 to-sky-600", title: "Upload knowledge", desc: "Add source material to index", href: "/knowledge" },
@@ -66,10 +82,10 @@ export default function DashboardPage() {
       </PageHeader>
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-        <StatsCard Icon={Layers} accent="indigo" label="Active frameworks" value="24" trend="+3" trendDir="up" sub="2 added this week" />
-        <StatsCard Icon={FileText} accent="violet" label="Items generated" value="1,284" trend="+18%" trendDir="up" sub="vs. last 30 days" />
-        <StatsCard Icon={ClipboardCheck} accent="amber" label="Awaiting review" value="37" trend="-12" trendDir="down" sub="Across 6 frameworks" />
-        <StatsCard Icon={CheckCircle} accent="emerald" label="Approval rate" value="91%" trend="+4%" trendDir="up" sub="Last 200 items" />
+        <StatsCard Icon={Layers} accent="indigo" label="Active frameworks" value={statsLoading ? "—" : (stats?.active_frameworks ?? 0).toLocaleString()} />
+        <StatsCard Icon={FileText} accent="violet" label="Items generated" value={statsLoading ? "—" : (stats?.items_generated ?? 0).toLocaleString()} />
+        <StatsCard Icon={ClipboardCheck} accent="amber" label="Awaiting review" value={statsLoading ? "—" : (stats?.awaiting_review ?? 0).toLocaleString()} />
+        <StatsCard Icon={CheckCircle} accent="emerald" label="Approval rate" value={statsLoading ? "—" : `${Math.round(stats?.approval_rate ?? 0)}%`} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -121,25 +137,31 @@ export default function DashboardPage() {
               <h3 className="text-sm font-semibold text-stone-900 dark:text-white">Recent activity</h3>
               <button className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline">View all</button>
             </div>
-            <ol className="space-y-1">
-              {ACTIVITY.map((a, i) => (
-                <li key={i} className="relative flex gap-3 pb-4 last:pb-0">
-                  {i < ACTIVITY.length - 1 && (
-                    <span className="absolute left-[15px] top-8 bottom-0 w-px bg-stone-200 dark:bg-white/[0.07]" />
-                  )}
-                  <span className={cn("relative z-10 mt-0.5 w-8 h-8 rounded-full flex items-center justify-center bg-stone-100 dark:bg-white/[0.06]", a.tint)}>
-                    <a.Icon size={15} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13px] text-stone-700 dark:text-stone-200 leading-snug">
-                      You {a.action}{" "}
-                      <span className="font-medium text-stone-900 dark:text-white">{a.target}</span>
-                    </p>
-                    <p className="text-[11.5px] text-stone-400 dark:text-stone-500 mt-0.5">{a.when}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
+            {activityLoading ? (
+              <p className="text-[13px] text-stone-400 dark:text-stone-500 py-4">Loading activity…</p>
+            ) : activityItems.length === 0 ? (
+              <EmptyState Icon={ActivityIcon} title="No activity yet" subtext="Actions across your workspace will appear here." />
+            ) : (
+              <ol className="space-y-1">
+                {activityItems.map((a, i) => {
+                  const { Icon, tint } = activityVisual(a.kind);
+                  return (
+                    <li key={a.id} className="relative flex gap-3 pb-4 last:pb-0">
+                      {i < activityItems.length - 1 && (
+                        <span className="absolute left-[15px] top-8 bottom-0 w-px bg-stone-200 dark:bg-white/[0.07]" />
+                      )}
+                      <span className={cn("relative z-10 mt-0.5 w-8 h-8 rounded-full flex items-center justify-center bg-stone-100 dark:bg-white/[0.06]", tint)}>
+                        <Icon size={15} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] text-stone-700 dark:text-stone-200 leading-snug">{a.summary}</p>
+                        <p className="text-[11.5px] text-stone-400 dark:text-stone-500 mt-0.5">{timeAgo(a.created_at)}</p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
           </div>
 
           <div className={cn(CARD, "p-5")}>
@@ -147,21 +169,21 @@ export default function DashboardPage() {
               <h3 className="text-sm font-semibold text-stone-900 dark:text-white">Review queue</h3>
               <button onClick={() => router.push("/review")} className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline">Open</button>
             </div>
-            <div className="space-y-2.5">
-              {REVIEW_PREVIEW.map((it) => (
-                <button
-                  key={it.id}
-                  onClick={() => router.push("/review")}
-                  className="w-full text-left rounded-xl border border-stone-200/70 dark:border-white/[0.06] p-3 hover:border-indigo-300 dark:hover:border-indigo-500/40 hover:bg-stone-50/60 dark:hover:bg-white/[0.02] transition"
-                >
-                  <div className="flex items-center justify-between gap-2 mb-1.5">
-                    <Tag tone="indigo">{it.type}</Tag>
-                    <StatusBadge status={it.status} size="sm" />
-                  </div>
-                  <p className="text-[12.5px] text-stone-700 dark:text-stone-300 line-clamp-2 leading-snug">{it.stem}</p>
-                </button>
-              ))}
-            </div>
+            {statsLoading ? (
+              <p className="text-[13px] text-stone-400 dark:text-stone-500 py-2">Loading…</p>
+            ) : (stats?.awaiting_review ?? 0) === 0 ? (
+              <EmptyState Icon={ClipboardCheck} title="Queue is clear" subtext="No items are awaiting review right now." />
+            ) : (
+              <button
+                onClick={() => router.push("/review")}
+                className="w-full text-left rounded-xl border border-stone-200/70 dark:border-white/[0.06] p-3 hover:border-indigo-300 dark:hover:border-indigo-500/40 hover:bg-stone-50/60 dark:hover:bg-white/[0.02] transition"
+              >
+                <p className="text-[13px] font-medium text-stone-900 dark:text-white">
+                  {stats?.awaiting_review} item{stats?.awaiting_review === 1 ? "" : "s"} awaiting review
+                </p>
+                <p className="text-[12px] text-stone-500 dark:text-stone-400 mt-0.5">Open the review queue to validate and approve.</p>
+              </button>
+            )}
           </div>
         </div>
       </div>

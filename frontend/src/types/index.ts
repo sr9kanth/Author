@@ -52,6 +52,58 @@ export interface Framework {
   name: string;
   description: string | null;
   version: string;
+  domain: string | null;
+  status: string;
+  outcomes_count: number;
+  items_count: number;
+  owner_name: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  domains?: unknown[];
+}
+
+export interface DashboardStats {
+  active_frameworks: number;
+  items_generated: number;
+  awaiting_review: number;
+  approval_rate: number;
+}
+
+export interface ActivityItem {
+  id: string;
+  kind: string;
+  summary: string;
+  created_at: string;
+}
+
+export interface AssessmentItem {
+  id: string;
+  content_id: string;
+  item_code: string;
+  tags: string[];
+  notes: string | null;
+  usage_count: number;
+  average_difficulty: number | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  stem: string | null;
+  type: string | null;
+  bloom: string | null;
+  difficulty: string | null;
+  topic: string | null;
+}
+
+export interface AssessmentPackage {
+  id: string;
+  name: string;
+  description: string | null;
+  configuration_id: string | null;
+  item_ids: string[];
+  export_formats: string[];
+  package_metadata: Record<string, unknown>;
+  status: string;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -107,7 +159,7 @@ export interface GeneratedContent {
   job_id: string;
   content_type: string;
   body: string;
-  metadata: Record<string, unknown>;
+  content_metadata: Record<string, unknown>;
   framework_alignment: Record<string, unknown>;
   source_references: unknown[];
   ai_provider: string;

@@ -1,28 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { CARD } from "@/components/ui/card";
 import { PageHeader, EmptyState, SearchInput, Segmented } from "@/components/ui/index";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { frameworksApi } from "@/lib/api";
+import { useAsync } from "@/lib/use-async";
 import { Plus, Filter, Folder, MoreHorizontal, ChevronUp, ChevronDown, ChevronsUpDown, Layers } from "lucide-react";
 
-const FRAMEWORKS = [
-  { id: "fw-1", name: "Bloom's Taxonomy Alignment", domain: "General Pedagogy", outcomes: 48, items: 312, status: "published", owner: "Amara O.", updated: "2026-05-29" },
-  { id: "fw-2", name: "Registered Nurse Competencies 2025", domain: "Health Sciences", outcomes: 126, items: 540, status: "published", owner: "Priya N.", updated: "2026-05-27" },
-  { id: "fw-3", name: "AP Biology — Unit Outcomes", domain: "Secondary STEM", outcomes: 64, items: 218, status: "approved", owner: "Lena B.", updated: "2026-05-24" },
-  { id: "fw-4", name: "ISTE Digital Literacy Standards", domain: "Educational Technology", outcomes: 28, items: 96, status: "validated", owner: "Tomás V.", updated: "2026-05-21" },
-  { id: "fw-5", name: "GCSE Mathematics Outcomes", domain: "Secondary STEM", outcomes: 72, items: 144, status: "generated", owner: "Marcus H.", updated: "2026-05-18" },
-  { id: "fw-6", name: "CFA Level I — Ethics Module", domain: "Professional Finance", outcomes: 18, items: 60, status: "draft", owner: "Amara O.", updated: "2026-05-16" },
-  { id: "fw-7", name: "Common Core ELA — Grade 8", domain: "Secondary Literacy", outcomes: 41, items: 130, status: "approved", owner: "Priya N.", updated: "2026-05-12" },
-  { id: "fw-8", name: "OSHA Workplace Safety Cert.", domain: "Vocational Training", outcomes: 22, items: 84, status: "validated", owner: "Lena B.", updated: "2026-05-09" },
-];
-
-const DOMAINS = ["All domains", "Health Sciences", "Secondary STEM", "General Pedagogy", "Educational Technology"];
+interface FrameworkRow {
+  id: string;
+  name: string;
+  domain: string;
+  outcomes: number;
+  items: number;
+  status: string;
+  owner: string;
+  updated: string;
+}
 
 function fmtDate(iso: string) {
-  const d = new Date(iso + "T00:00:00");
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
@@ -30,12 +31,33 @@ export default function FrameworksPage() {
   const [query, setQuery] = useState("");
   const [domain, setDomain] = useState("All domains");
   const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: "updated", dir: "desc" });
-  const [emptyDemo, setEmptyDemo] = useState(false);
+
+  const { data, loading, error } = useAsync(() => frameworksApi.list(0, 100), []);
+
+  const frameworks: FrameworkRow[] = useMemo(
+    () =>
+      (data?.items ?? []).map((f) => ({
+        id: f.id,
+        name: f.name,
+        domain: f.domain ?? "—",
+        outcomes: f.outcomes_count,
+        items: f.items_count,
+        status: f.status,
+        owner: f.owner_name ?? "—",
+        updated: f.updated_at,
+      })),
+    [data],
+  );
+
+  const DOMAINS = useMemo(() => {
+    const set = new Set(frameworks.map((f) => f.domain).filter((d) => d && d !== "—"));
+    return ["All domains", ...Array.from(set)];
+  }, [frameworks]);
 
   const onSort = (key: string) =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
 
-  let rows = FRAMEWORKS.filter((f) => {
+  let rows = frameworks.filter((f) => {
     const q = query.trim().toLowerCase();
     const matchQ = !q || f.name.toLowerCase().includes(q) || f.domain.toLowerCase().includes(q);
     const matchD = domain === "All domains" || f.domain === domain;
@@ -44,12 +66,13 @@ export default function FrameworksPage() {
 
   rows = [...rows].sort((a, b) => {
     const dir = sort.dir === "asc" ? 1 : -1;
-    const va = (a as any)[sort.key], vb = (b as any)[sort.key];
-    if (typeof va === "number") return (va - vb) * dir;
+    const va = (a as unknown as Record<string, unknown>)[sort.key];
+    const vb = (b as unknown as Record<string, unknown>)[sort.key];
+    if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
     return String(va).localeCompare(String(vb)) * dir;
   });
 
-  if (emptyDemo) rows = [];
+  const isEmpty = !loading && frameworks.length === 0;
 
   const columns = [
     { key: "name", label: "Framework" },
@@ -81,29 +104,23 @@ export default function FrameworksPage() {
           onChange={setDomain}
         />
         <div className="flex-1" />
-        <button
-          onClick={() => setEmptyDemo((v) => !v)}
-          className="text-xs text-stone-400 dark:text-stone-500 hover:text-indigo-500 transition"
-        >
-          {emptyDemo ? "← Show data" : "Preview empty state"}
-        </button>
       </div>
 
       <div className={cn(CARD, "overflow-hidden")}>
-        {rows.length === 0 ? (
+        {loading ? (
+          <div className="py-16 text-center text-sm text-stone-400 dark:text-stone-500">Loading frameworks…</div>
+        ) : error ? (
+          <EmptyState Icon={Layers} title="Couldn't load frameworks" subtext={error} />
+        ) : rows.length === 0 ? (
           <EmptyState
             Icon={Layers}
-            title={emptyDemo ? "No frameworks yet" : "No matches found"}
+            title={isEmpty ? "No frameworks yet" : "No matches found"}
             subtext={
-              emptyDemo
+              isEmpty
                 ? "Frameworks organise your learning outcomes and competencies. Create one to start generating aligned assessment content."
                 : "Try adjusting your search or domain filter."
             }
-            action={
-              emptyDemo ? (
-                <Button Icon={Plus} onClick={() => setEmptyDemo(false)}>Create your first framework</Button>
-              ) : null
-            }
+            action={isEmpty ? <Button Icon={Plus}>Create your first framework</Button> : null}
           />
         ) : (
           <div className="overflow-x-auto">
@@ -172,7 +189,7 @@ export default function FrameworksPage() {
 
       {rows.length > 0 && (
         <p className="mt-3 text-xs text-stone-400 dark:text-stone-500">
-          Showing {rows.length} of {FRAMEWORKS.length} frameworks
+          Showing {rows.length} of {frameworks.length} frameworks
         </p>
       )}
     </div>
