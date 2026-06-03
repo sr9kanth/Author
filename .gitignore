@@ -47,8 +47,8 @@ Thumbs.db
 # Docker
 *.env.docker
 
-# Alembic generated
-backend/alembic/versions/*.py
+# Alembic — migration scripts ARE committed (schema history); ignore only caches
+backend/alembic/versions/__pycache__/
 
 # Secrets
 *.pem

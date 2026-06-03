@@ -22,6 +22,13 @@ import app.modules.assembly.models  # noqa: F401
 
 config = context.config
 
+# Allow overriding the database URL via environment variable (harmless in prod).
+import os
+
+_override_url = os.getenv("ALEMBIC_DB_URL")
+if _override_url:
+    config.set_main_option("sqlalchemy.url", _override_url)
+
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
