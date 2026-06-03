@@ -307,31 +307,76 @@ The `AssessmentAgent` in `backend/app/agents/assessment_agent.py` handles genera
 
 Schema is created automatically via `init_db()` in `backend/app/core/database.py` on startup (`Base.metadata.create_all`). The pgvector extension is also created there.
 
-**Alembic is configured but has no migration files yet.** Before making schema changes, generate an initial migration:
+An **initial Alembic migration** is committed under `backend/alembic/versions/`. To apply migrations in production instead of relying on `create_all`:
 
 ```bash
 cd backend
-alembic revision --autogenerate -m "initial schema"
 alembic upgrade head
 ```
+
+`alembic/env.py` honors an `ALEMBIC_DB_URL` env var to override the target database.
+
+---
+
+## Completing the Deployment (Dashboard Steps)
+
+These steps require the Railway dashboard and cannot be done from code.
+
+### 1. Add the Celery worker service
+
+The worker runs background jobs (knowledge processing, generation, quality validation). Without it, those features silently never complete.
+
+1. Railway → your project → **+ New** → **GitHub Repo** → select `sr9kanth/Author`
+2. Open the new service → **Settings** → **Build** → set **Dockerfile Path** to `backend/Dockerfile` (same as the backend service)
+3. **Settings** → **Deploy** → **Custom Start Command**:
+   ```
+   celery -A app.workers.celery_app worker --loglevel=info
+   ```
+   (Run inside the backend dir: if needed use `sh -c "cd backend && celery -A app.workers.celery_app worker --loglevel=info"` — but since the Dockerfile WORKDIR is `/app` with backend copied in, the plain command works.)
+4. **Variables** tab → add the **same** env vars as the backend service. Critical: `REDIS_URL`, `DATABASE_URL` (reference the shared Postgres/Redis plugins), `SECRET_KEY`, `DEEPSEEK_API_KEY`, and the `AWS_*` vars below.
+5. Deploy. Logs should show `celery@... ready.`
+
+A root `Procfile` documents both process types (`web`, `worker`).
+
+### 2. Configure S3 / MinIO (file uploads)
+
+File uploads (`POST /knowledge/{id}/upload`) store to S3 and the worker reads them back. Set these on **both** the backend AND worker services:
+
+| Variable | Value |
+|----------|-------|
+| `AWS_ACCESS_KEY_ID` | S3 / MinIO access key |
+| `AWS_SECRET_ACCESS_KEY` | S3 / MinIO secret |
+| `AWS_BUCKET_NAME` | bucket name (must already exist) |
+| `AWS_ENDPOINT_URL` | leave blank for AWS S3; set to the MinIO URL otherwise |
+
+Easiest path: create an AWS S3 bucket (any region), generate an IAM key with `s3:PutObject`/`s3:GetObject` on that bucket, and fill in the three values (leave `AWS_ENDPOINT_URL` blank). Alternatively add a MinIO service on Railway and point `AWS_ENDPOINT_URL` at it.
+
+### 3. Create the first admin user
+
+Run from anywhere with network access to the backend:
+
+```bash
+EMAIL="you@example.com" PASSWORD="strong-password" FULL_NAME="Your Name" \
+  ./scripts/create-admin.sh
+```
+
+This POSTs to `/api/v1/auth/register` with `role: administrator` and verifies login. Then sign in at the frontend `/login`.
 
 ---
 
 ## Known Issues & Pending Work
 
 ### High priority
-| Issue | Location | Fix needed |
-|-------|----------|-----------|
-| No database migrations | `backend/alembic/versions/` is empty | Run `alembic revision --autogenerate` and commit |
-| Knowledge content not used in generation | `backend/app/workers/tasks.py:107` | Replace hardcoded `"Assessment content placeholder"` with real asset text extraction |
-| No Celery worker on Railway | Railway project | Add second Railway service: `celery -A app.workers.celery_app worker` |
+| Issue | Location | Status |
+|-------|----------|--------|
+| Celery worker not deployed | Railway project | Code ready (Procfile); **needs the dashboard step above** |
+| S3 bucket / env vars | Railway env vars | Code ready; **needs the dashboard step above** |
+| Knowledge content not used in generation | `backend/app/workers/tasks.py` | Upload now dispatches `process_knowledge_asset`; generation still uses a placeholder for source text — wire real extracted text next |
 
 ### Medium priority
 | Issue | Location | Fix needed |
 |-------|----------|-----------|
 | Keycloak OIDC stub | `frontend/src/lib/auth.ts:49,54` | Implement OIDC flow or remove stub |
-| Pages use mock/static data | All dashboard pages | Wire up to real API endpoints via `lib/api.ts` |
-| No S3 bucket configured | Railway env vars | Add AWS_* vars to enable file uploads |
 
 ### Low priority
 | Issue | Location | Notes |

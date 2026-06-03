@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, status
 from app.core.deps import CurrentUserID, DBSession
 from app.modules.knowledge.schemas import KnowledgeAssetCreate, KnowledgeAssetList, KnowledgeAssetRead, KnowledgeAssetUpdate
 from app.modules.knowledge.service import KnowledgeService
+from app.workers.tasks import process_knowledge_asset
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
@@ -21,7 +22,10 @@ async def upload_file(asset_id: str, file: UploadFile, current_user_id: CurrentU
     service = KnowledgeService(db)
     try:
         file_bytes = await file.read()
-        return await service.upload_file(asset_id, file_bytes, file.filename or "upload")
+        asset = await service.upload_file(asset_id, file_bytes, file.filename or "upload")
+        # Kick off async extraction + AI analysis on the worker
+        process_knowledge_asset.delay(str(asset_id))
+        return asset
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
