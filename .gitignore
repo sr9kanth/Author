@@ -55,3 +55,4 @@ backend/alembic/versions/*.py
 *.key
 *.crt
 secrets/
+frontend/tsconfig.tsbuildinfo
