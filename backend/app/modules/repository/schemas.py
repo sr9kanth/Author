@@ -20,6 +20,12 @@ class AssessmentItemRead(AssessmentItemCreate):
     created_by: uuid.UUID
     created_at: datetime
     updated_at: datetime
+    # Passthrough fields surfaced from the linked GeneratedContent
+    stem: str | None = None
+    type: str | None = None
+    bloom: str | None = None
+    difficulty: str | None = None
+    topic: str | None = None
 
 
 class AssessmentItemList(BaseModel):

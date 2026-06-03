@@ -70,12 +70,17 @@ class FrameworkCreate(BaseModel):
     name: str
     description: str | None = None
     version: str = "1.0"
+    domain: str | None = None
+    status: str = "draft"
 
 
 class FrameworkRead(FrameworkCreate):
     id: uuid.UUID
     created_by: uuid.UUID
     domains: list[DomainRead] = []
+    outcomes_count: int = 0
+    items_count: int = 0
+    owner_name: str | None = None
     created_at: datetime
     updated_at: datetime
 
