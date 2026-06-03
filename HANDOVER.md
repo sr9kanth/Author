@@ -1,16 +1,25 @@
 # AIP — Assessment Intelligence Platform: Handover Document
 
-## Project Overview
+> **For Claude Code on the web**: Start a session at https://code.claude.com, connect the `sr9kanth/Author` repository, and open this file first. The active branch is `claude/amazing-turing-8hAH3`. All commands below assume the repo root unless stated otherwise.
 
-AIP is a full-stack AI-native platform for creating, managing, validating, and assembling assessment content (exam questions, competency frameworks, learning outcomes). Built for organisations that need structured, auditable, AI-assisted assessment authoring.
+---
 
-**Live URLs**
-- Frontend: https://writer-two-iota.vercel.app
-- Backend API: https://author-production.up.railway.app
-- API Docs: https://author-production.up.railway.app/docs
+## Live URLs
+
+| Service | URL |
+|---------|-----|
+| Frontend | https://writer-two-iota.vercel.app |
+| Backend API | https://author-production.up.railway.app |
+| API Docs (Swagger) | https://author-production.up.railway.app/docs |
 
 **Repository**: `sr9kanth/Author`  
 **Active branch**: `claude/amazing-turing-8hAH3`
+
+---
+
+## What this project is
+
+AIP is a full-stack AI-native platform for creating, managing, validating, and assembling assessment content (exam questions, competency frameworks, learning outcomes). Built for organisations that need structured, auditable, AI-assisted assessment authoring.
 
 ---
 
@@ -24,7 +33,7 @@ AIP is a full-stack AI-native platform for creating, managing, validating, and a
 | AI | LiteLLM — DeepSeek by default, supports OpenAI, Anthropic, Gemini, Ollama |
 | Auth | JWT (python-jose) + bcrypt (passlib) |
 | File storage | AWS S3 / MinIO (boto3) |
-| Frontend | Next.js 14, TypeScript, Tailwind CSS |
+| Frontend | Next.js 14, TypeScript, Tailwind CSS, Lucide icons |
 | Backend deploy | Railway (Dockerfile build from repo root) |
 | Frontend deploy | Vercel (root directory: `frontend/`) |
 
@@ -67,20 +76,26 @@ Author/
 │   ├── src/
 │   │   ├── app/
 │   │   │   ├── (auth)/login/         # /login — public
-│   │   │   ├── (dashboard)/          # Protected route group
-│   │   │   │   ├── layout.tsx        # Auth guard + sidebar layout
-│   │   │   │   ├── dashboard/        # /dashboard
-│   │   │   │   ├── knowledge/        # /knowledge
-│   │   │   │   ├── frameworks/       # /frameworks
-│   │   │   │   ├── configurations/   # /configurations
-│   │   │   │   ├── generate/         # /generate
-│   │   │   │   ├── review/           # /review
-│   │   │   │   ├── repository/       # /repository
-│   │   │   │   └── assembly/         # /assembly
-│   │   │   └── layout.tsx / page.tsx # Root layout + home redirect
+│   │   │   └── (dashboard)/          # Protected route group
+│   │   │       ├── layout.tsx        # Sidebar + Topbar layout
+│   │   │       ├── dashboard/        # /dashboard — stats, chart, activity, review queue
+│   │   │       ├── frameworks/       # /frameworks — sortable table with search/filter
+│   │   │       ├── knowledge/        # /knowledge — upload zone + asset list
+│   │   │       ├── generate/         # /generate — job config form + progress
+│   │   │       ├── review/           # /review — split-panel review UI
+│   │   │       ├── repository/       # /repository — item bank with grid/list toggle
+│   │   │       ├── assembly/         # /assembly — drag-and-drop package builder
+│   │   │       └── configurations/   # /configurations
 │   │   ├── components/
-│   │   │   ├── ui/                   # badge, button, card, input, table
-│   │   │   ├── layout/               # header, sidebar, nav-items
+│   │   │   ├── ui/
+│   │   │   │   ├── button.tsx        # Button variants: primary/secondary/ghost/danger
+│   │   │   │   ├── badge.tsx         # StatusBadge (5 content statuses) + Tag
+│   │   │   │   ├── card.tsx          # CARD constant (use as className)
+│   │   │   │   ├── input.tsx         # Input + INPUT_CLS constant
+│   │   │   │   └── index.tsx         # StatsCard, PageHeader, EmptyState, SearchInput, Segmented, FileUploadZone
+│   │   │   ├── layout/
+│   │   │   │   ├── sidebar.tsx       # Dark #0C0C0F sidebar, section groups, storage meter
+│   │   │   │   └── topbar.tsx        # Sticky topbar, breadcrumb, search, dark mode toggle
 │   │   │   └── features/
 │   │   │       ├── knowledge/upload-form.tsx
 │   │   │       ├── generation/generation-form.tsx
@@ -89,7 +104,7 @@ Author/
 │   │   │   ├── api.ts                # Axios client pointing at NEXT_PUBLIC_API_URL
 │   │   │   ├── auth.ts               # Token storage, login/logout helpers
 │   │   │   └── utils.ts
-│   │   └── types/index.ts            # All TypeScript interfaces (see below)
+│   │   └── types/index.ts            # All TypeScript interfaces
 │   ├── next.config.mjs               # output: standalone, /api/proxy/* rewrite
 │   ├── vercel.json                   # Security headers
 │   └── package.json
@@ -99,6 +114,22 @@ Author/
 ├── vercel.json                       # Root vercel.json for monorepo (frontend only)
 └── docker-compose.yml                # Local full-stack dev (postgres, redis, backend, frontend)
 ```
+
+---
+
+## Design System
+
+The frontend uses a warm Notion-ish SaaS design system:
+
+- **Paper surface**: `bg-[var(--paper)]` — `#fafaf9` light / `#141316` dark
+- **Sidebar**: `#0C0C0F` (always dark)
+- **Brand**: indigo (`#6366f1`) with violet accents
+- **Cards**: `CARD` constant from `components/ui/card.tsx`
+- **Dark mode**: Tailwind `class` strategy — toggled by `document.documentElement.classList.toggle("dark")`
+- **Icons**: Lucide React throughout
+
+**StatusBadge taxonomy** (in `badge.tsx`):
+- `draft` → stone, `generated` → violet, `validated` → amber, `approved` → emerald, `published` → sky, `archived` → slate
 
 ---
 
@@ -246,9 +277,8 @@ The `AssessmentAgent` in `backend/app/agents/assessment_agent.py` handles genera
 
 ## Environment Variables
 
-Set all of these in Railway (backend service → Variables tab).
+### Railway (backend service → Variables tab)
 
-### Required
 | Variable | Value |
 |----------|-------|
 | `DATABASE_URL` | Auto-set by Railway Postgres plugin |
@@ -257,23 +287,16 @@ Set all of these in Railway (backend service → Variables tab).
 | `DEEPSEEK_API_KEY` | From platform.deepseek.com |
 | `CORS_ORIGINS` | `["https://writer-two-iota.vercel.app"]` |
 | `ENVIRONMENT` | `production` |
-
-### Required for file uploads
-| Variable | Value |
-|----------|-------|
-| `AWS_ACCESS_KEY_ID` | S3 or MinIO key |
+| `AWS_ACCESS_KEY_ID` | S3 or MinIO key (required for file uploads) |
 | `AWS_SECRET_ACCESS_KEY` | S3 or MinIO secret |
 | `AWS_BUCKET_NAME` | Bucket name |
 | `AWS_ENDPOINT_URL` | Leave blank for AWS S3; MinIO URL otherwise |
+| `ANTHROPIC_API_KEY` | Optional — Anthropic console |
+| `OPENAI_API_KEY` | Optional — OpenAI platform |
+| `GEMINI_API_KEY` | Optional — Google AI Studio |
 
-### Optional (additional AI providers)
-| Variable | Value |
-|----------|-------|
-| `ANTHROPIC_API_KEY` | Anthropic console |
-| `OPENAI_API_KEY` | OpenAI platform |
-| `GEMINI_API_KEY` | Google AI Studio |
+### Vercel (frontend → Settings → Environment Variables)
 
-### Vercel (frontend)
 | Variable | Value |
 |----------|-------|
 | `NEXT_PUBLIC_API_URL` | `https://author-production.up.railway.app` |
@@ -301,13 +324,14 @@ alembic upgrade head
 |-------|----------|-----------|
 | No database migrations | `backend/alembic/versions/` is empty | Run `alembic revision --autogenerate` and commit |
 | Knowledge content not used in generation | `backend/app/workers/tasks.py:107` | Replace hardcoded `"Assessment content placeholder"` with real asset text extraction |
+| No Celery worker on Railway | Railway project | Add second Railway service: `celery -A app.workers.celery_app worker` |
 
 ### Medium priority
 | Issue | Location | Fix needed |
 |-------|----------|-----------|
-| UI has no styling | All frontend pages | Paste design system from Claude Design (in progress) |
 | Keycloak OIDC stub | `frontend/src/lib/auth.ts:49,54` | Implement OIDC flow or remove stub |
-| No Celery worker on Railway | Railway project | Add a second Railway service with `celery -A app.workers.celery_app worker` as start command |
+| Pages use mock/static data | All dashboard pages | Wire up to real API endpoints via `lib/api.ts` |
+| No S3 bucket configured | Railway env vars | Add AWS_* vars to enable file uploads |
 
 ### Low priority
 | Issue | Location | Notes |
@@ -338,8 +362,6 @@ cd backend
 celery -A app.workers.celery_app worker --loglevel=info
 ```
 
-Requires local PostgreSQL and Redis, or use `docker-compose.dev.yml`.
-
 ---
 
 ## Deploying Changes
@@ -349,7 +371,6 @@ All deployments are triggered by pushing to `claude/amazing-turing-8hAH3`.
 - **Railway** redeploys the backend automatically on push
 - **Vercel** redeploys the frontend automatically on push
 
-To deploy:
 ```bash
 git add <files>
 git commit -m "your message"
@@ -366,7 +387,17 @@ Monitor:
 
 1. **Add Celery worker service on Railway** — generation and quality validation won't work without it
 2. **Generate Alembic initial migration** — production schema management
-3. **Apply UI design** — paste Claude Design output into frontend components
-4. **Wire real knowledge content into generation jobs** — replace placeholder in tasks.py
-5. **Set up S3/MinIO** — enable file upload feature
-6. **Add first user** — POST to `/api/v1/auth/register` to create an admin account
+3. **Wire API data into frontend pages** — replace mock data with real `lib/api.ts` calls
+4. **Set up S3/MinIO** — enable file upload feature; add AWS_* env vars to Railway
+5. **Add first user** — POST to `/api/v1/auth/register` to create an admin account
+6. **Wire real knowledge content into generation** — replace placeholder in `tasks.py:107`
+
+---
+
+## Starting a New Claude Code Session on the Web
+
+1. Go to https://code.claude.com
+2. Connect the `sr9kanth/Author` GitHub repository
+3. When the session starts, Claude will be on a fresh clone — your changes are on `claude/amazing-turing-8hAH3`
+4. Say: _"Read HANDOVER.md and continue development on branch `claude/amazing-turing-8hAH3`"_
+5. Claude Code will have access to all files, can run commands, edit code, and push changes
