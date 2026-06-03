@@ -1,36 +1,51 @@
+"use client";
 import { cn } from "@/lib/utils";
+import type { LucideIcon } from "lucide-react";
 import type { ButtonHTMLAttributes } from "react";
 
+type Variant = "primary" | "secondary" | "ghost" | "danger";
+type Size = "sm" | "md" | "lg";
+
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "ghost" | "danger";
-  size?: "sm" | "md" | "lg";
+  variant?: Variant;
+  size?: Size;
+  Icon?: LucideIcon;
+  IconRight?: LucideIcon;
 }
 
-const variantClasses: Record<NonNullable<ButtonProps["variant"]>, string> = {
-  primary: "bg-brand-600 hover:bg-brand-700 text-white",
-  secondary: "bg-white border border-gray-300 hover:bg-gray-50 text-gray-700",
-  ghost: "hover:bg-gray-100 text-gray-700",
-  danger: "bg-red-600 hover:bg-red-700 text-white",
+const base =
+  "inline-flex items-center justify-center gap-2 font-medium rounded-xl transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap";
+
+const sizes: Record<Size, string> = {
+  sm: "text-[13px] px-3 py-1.5",
+  md: "text-sm px-3.5 py-2",
+  lg: "text-sm px-4 py-2.5",
 };
 
-const sizeClasses: Record<NonNullable<ButtonProps["size"]>, string> = {
-  sm: "px-3 py-1.5 text-sm",
-  md: "px-4 py-2 text-sm",
-  lg: "px-5 py-2.5 text-base",
+const variants: Record<Variant, string> = {
+  primary: "bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm shadow-indigo-600/20",
+  secondary:
+    "bg-white dark:bg-white/[0.05] border border-stone-200 dark:border-white/10 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-white/[0.09]",
+  ghost: "text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-white/[0.06]",
+  danger:
+    "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-500/20",
 };
 
-export function Button({ variant = "primary", size = "md", className, children, ...props }: ButtonProps) {
+export function Button({
+  variant = "primary",
+  size = "md",
+  Icon,
+  IconRight,
+  children,
+  className,
+  ...rest
+}: ButtonProps) {
+  const iconSize = size === "sm" ? 15 : 16;
   return (
-    <button
-      {...props}
-      className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed",
-        variantClasses[variant],
-        sizeClasses[size],
-        className,
-      )}
-    >
+    <button className={cn(base, sizes[size], variants[variant], className)} {...rest}>
+      {Icon && <Icon size={iconSize} />}
       {children}
+      {IconRight && <IconRight size={iconSize} />}
     </button>
   );
 }

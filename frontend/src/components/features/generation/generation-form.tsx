@@ -4,7 +4,7 @@ import { useState } from "react";
 import { generationApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/badge";
 import type { GenerationJob } from "@/types";
 
 const AI_PROVIDERS = [
@@ -111,7 +111,7 @@ export default function GenerationForm() {
           <p className="font-medium">Generation job created</p>
           <p className="mt-1 text-xs font-mono text-green-600">{createdJob.id}</p>
           <p className="mt-1">
-            Status: <Badge label={createdJob.status} status={createdJob.status} />
+            Status: <StatusBadge status={createdJob.status} />
           </p>
         </div>
       )}

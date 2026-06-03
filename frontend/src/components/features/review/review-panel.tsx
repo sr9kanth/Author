@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge, Tag } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { GeneratedContent } from "@/types";
 
@@ -41,7 +41,7 @@ export default function ReviewPanel() {
             <CardContent className="py-3">
               <p className="text-sm font-medium text-gray-800 line-clamp-2">{item.body}</p>
               <div className="mt-2 flex items-center gap-2">
-                <Badge label={item.status} status={item.status} />
+                <StatusBadge status={item.status} />
                 {item.validation_score !== null && (
                   <span className="text-xs text-gray-500">
                     Score: {(item.validation_score * 100).toFixed(0)}%
@@ -67,8 +67,8 @@ export default function ReviewPanel() {
               </div>
 
               <div className="flex gap-2">
-                <Badge label={selected.status} status={selected.status} />
-                <Badge label={selected.content_type} />
+                <StatusBadge status={selected.status} />
+                <Tag tone="indigo">{selected.content_type}</Tag>
               </div>
 
               <div>

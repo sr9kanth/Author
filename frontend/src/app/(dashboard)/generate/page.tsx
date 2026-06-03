@@ -1,23 +1,191 @@
-import Header from "@/components/layout/header";
-import GenerationForm from "@/components/features/generation/generation-form";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+"use client";
 
-export default function GeneratePage() {
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { CARD } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/index";
+import { Tag } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { INPUT_CLS } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { Sparkles, ChevronDown, Check, ClipboardCheck, CheckCircle } from "lucide-react";
+
+const FRAMEWORKS = [
+  { id: "fw-1", name: "Bloom's Taxonomy Alignment" },
+  { id: "fw-2", name: "Registered Nurse Competencies 2025" },
+  { id: "fw-3", name: "AP Biology — Unit Outcomes" },
+  { id: "fw-4", name: "ISTE Digital Literacy Standards" },
+  { id: "fw-5", name: "GCSE Mathematics Outcomes" },
+  { id: "fw-6", name: "CFA Level I — Ethics Module" },
+];
+
+const ITEM_TYPES = ["Multiple Choice", "Short Answer", "True / False", "Numeric Response", "Extended Response"];
+const DIFFICULTY = ["Easy", "Medium", "Hard"];
+const BLOOM = ["Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"];
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
-      <Header
-        title="Generate Content"
-        subtitle="Use AI to generate assessment questions from your knowledge assets"
-      />
-      <div className="p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>New Generation Job</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <GenerationForm />
-          </CardContent>
-        </Card>
+      <label className="block text-[13px] font-medium text-stone-700 dark:text-stone-200 mb-1.5">{label}</label>
+      {children}
+      {hint && <p className="mt-1.5 text-[12px] text-stone-400 dark:text-stone-500">{hint}</p>}
+    </div>
+  );
+}
+
+function Stepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="inline-flex items-center rounded-xl border border-stone-200 dark:border-white/10 overflow-hidden">
+      <button onClick={() => onChange(Math.max(1, value - 5))} className="w-10 h-10 flex items-center justify-center text-stone-500 hover:bg-stone-100 dark:hover:bg-white/[0.06] transition text-lg">–</button>
+      <span className="w-14 text-center text-sm font-semibold text-stone-900 dark:text-white tabular-nums">{value}</span>
+      <button onClick={() => onChange(Math.min(200, value + 5))} className="w-10 h-10 flex items-center justify-center text-stone-500 hover:bg-stone-100 dark:hover:bg-white/[0.06] transition text-lg">+</button>
+    </div>
+  );
+}
+
+export default function GeneratePage() {
+  const router = useRouter();
+  const [framework, setFramework] = useState(FRAMEWORKS[1].id);
+  const [type, setType] = useState("Multiple Choice");
+  const [count, setCount] = useState(25);
+  const [difficulty, setDifficulty] = useState<Record<string, boolean>>({ Easy: true, Medium: true, Hard: false });
+  const [bloom, setBloom] = useState(["Understand", "Apply"]);
+  const [creativity, setCreativity] = useState(40);
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  const toggleBloom = (b: string) =>
+    setBloom((arr) => (arr.includes(b) ? arr.filter((x) => x !== b) : [...arr, b]));
+
+  const run = () => {
+    setRunning(true);
+    setProgress(0);
+    const iv = setInterval(() => {
+      setProgress((p) => {
+        if (p >= 100) { clearInterval(iv); return 100; }
+        return Math.min(100, p + Math.random() * 12 + 4);
+      });
+    }, 280);
+  };
+
+  const fw = FRAMEWORKS.find((f) => f.id === framework) || FRAMEWORKS[0];
+  const done = running && progress >= 100;
+  const creativityLabel = creativity < 33 ? "Conservative" : creativity < 66 ? "Balanced" : "Exploratory";
+
+  return (
+    <div>
+      <PageHeader
+        title="Generate items"
+        description="Configure an AI generation job. Items are drafted from your knowledge base and aligned to the selected framework's outcomes."
+      >
+        <Tag tone="violet">AI</Tag>
+      </PageHeader>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-5">
+          <div className={cn(CARD, "p-5 sm:p-6 space-y-6")}>
+            <Field label="Target framework" hint="Items will be aligned to this framework's learning outcomes.">
+              <div className="relative">
+                <select value={framework} onChange={(e) => setFramework(e.target.value)} className={cn(INPUT_CLS, "appearance-none pr-10")}>
+                  {FRAMEWORKS.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </select>
+                <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
+              </div>
+            </Field>
+
+            <div className="grid sm:grid-cols-2 gap-5">
+              <Field label="Item type">
+                <div className="relative">
+                  <select value={type} onChange={(e) => setType(e.target.value)} className={cn(INPUT_CLS, "appearance-none pr-10")}>
+                    {ITEM_TYPES.map((t) => <option key={t}>{t}</option>)}
+                  </select>
+                  <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
+                </div>
+              </Field>
+              <Field label="Number of items">
+                <Stepper value={count} onChange={setCount} />
+              </Field>
+            </div>
+
+            <Field label="Difficulty mix">
+              <div className="flex flex-wrap gap-2">
+                {DIFFICULTY.map((d) => {
+                  const on = difficulty[d];
+                  return (
+                    <button key={d} onClick={() => setDifficulty((s) => ({ ...s, [d]: !s[d] }))}
+                      className={cn("px-3.5 py-2 rounded-xl text-sm font-medium border transition",
+                        on ? "border-indigo-400 bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-200"
+                           : "border-stone-200 dark:border-white/10 text-stone-500 dark:text-stone-400 hover:border-stone-300 dark:hover:border-white/20")}>
+                      {on && <Check size={14} className="inline mr-1.5 -mt-0.5" />}{d}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+
+            <Field label="Cognitive level" hint="Bloom's taxonomy levels to target.">
+              <div className="flex flex-wrap gap-2">
+                {BLOOM.map((b) => {
+                  const on = bloom.includes(b);
+                  return (
+                    <button key={b} onClick={() => toggleBloom(b)}
+                      className={cn("px-3 py-1.5 rounded-full text-[13px] font-medium border transition",
+                        on ? "border-violet-400 bg-violet-50 dark:bg-violet-500/15 text-violet-700 dark:text-violet-200"
+                           : "border-stone-200 dark:border-white/10 text-stone-500 dark:text-stone-400 hover:border-stone-300 dark:hover:border-white/20")}>
+                      {b}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+
+            <Field label={`Creativity — ${creativityLabel}`} hint="Lower values stay closer to source material; higher values produce more novel scenarios.">
+              <input type="range" min="0" max="100" value={creativity} onChange={(e) => setCreativity(+e.target.value)} className="w-full accent-indigo-500 h-2" />
+            </Field>
+
+            <Field label="Additional instructions">
+              <textarea rows={3} placeholder="e.g. Use clinical scenarios set in community-care contexts. Avoid abbreviations in stems." className={cn(INPUT_CLS, "resize-none")} />
+            </Field>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className={cn(CARD, "p-5 sticky top-20")}>
+            <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-4">Job summary</h3>
+            <dl className="space-y-3 text-[13px]">
+              <div className="flex justify-between gap-3"><dt className="text-stone-500 dark:text-stone-400">Framework</dt><dd className="font-medium text-stone-900 dark:text-white text-right">{fw.name}</dd></div>
+              <div className="flex justify-between"><dt className="text-stone-500 dark:text-stone-400">Type</dt><dd className="font-medium text-stone-900 dark:text-white">{type}</dd></div>
+              <div className="flex justify-between"><dt className="text-stone-500 dark:text-stone-400">Items</dt><dd className="font-medium text-stone-900 dark:text-white tabular-nums">{count}</dd></div>
+              <div className="flex justify-between gap-3"><dt className="text-stone-500 dark:text-stone-400">Difficulty</dt><dd className="font-medium text-stone-900 dark:text-white text-right">{Object.keys(difficulty).filter((k) => difficulty[k]).join(", ") || "—"}</dd></div>
+              <div className="flex justify-between gap-3"><dt className="text-stone-500 dark:text-stone-400">Levels</dt><dd className="font-medium text-stone-900 dark:text-white text-right">{bloom.length ? bloom.join(", ") : "—"}</dd></div>
+            </dl>
+            <div className="my-4 h-px bg-stone-100 dark:bg-white/[0.06]" />
+            <div className="flex items-center justify-between text-[13px] mb-4">
+              <span className="text-stone-500 dark:text-stone-400">Est. credits</span>
+              <span className="font-semibold text-stone-900 dark:text-white tabular-nums">{count * 2}</span>
+            </div>
+            {!running && <Button Icon={Sparkles} className="w-full" size="lg" onClick={run}>Generate {count} items</Button>}
+            {running && !done && (
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between text-[12.5px]">
+                  <span className="inline-flex items-center gap-1.5 text-violet-600 dark:text-violet-300 font-medium"><Sparkles size={14} className="animate-pulse" /> Generating…</span>
+                  <span className="text-stone-500 dark:text-stone-400 tabular-nums">{Math.min(100, Math.round(progress))}%</span>
+                </div>
+                <div className="h-2 rounded-full bg-stone-100 dark:bg-white/[0.06] overflow-hidden">
+                  <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-300" style={{ width: `${Math.min(100, progress)}%` }} />
+                </div>
+              </div>
+            )}
+            {done && (
+              <div className="text-center space-y-3">
+                <div className="mx-auto w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-500/15 text-emerald-500 flex items-center justify-center"><CheckCircle size={24} /></div>
+                <p className="text-sm font-medium text-stone-900 dark:text-white">{count} items generated</p>
+                <Button Icon={ClipboardCheck} className="w-full" onClick={() => router.push("/review")}>Review now</Button>
+                <button onClick={() => { setRunning(false); setProgress(0); }} className="text-xs text-stone-400 hover:text-stone-600 dark:hover:text-stone-300">Run another job</button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
