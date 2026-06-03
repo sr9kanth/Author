@@ -33,9 +33,9 @@ export default function ReviewPanel() {
       {/* Item list */}
       <div className="lg:col-span-1 space-y-3">
         {mockItems.map((item) => (
-          <Card
+          <div
             key={item.id}
-            className={`cursor-pointer transition-shadow hover:shadow-md ${selected?.id === item.id ? "ring-2 ring-brand-500" : ""}`}
+            className={`cursor-pointer transition-shadow hover:shadow-md rounded-lg border bg-white ${selected?.id === item.id ? "ring-2 ring-brand-500" : ""}`}
             onClick={() => setSelected(item)}
           >
             <CardContent className="py-3">
@@ -49,7 +49,7 @@ export default function ReviewPanel() {
                 )}
               </div>
             </CardContent>
-          </Card>
+          </div>
         ))}
       </div>
 
