@@ -17,6 +17,39 @@
 
 ---
 
+## Deployment Status (as of 2026-06-04)
+
+**The live deployment is working: auth, DB, and the UI are all up.**
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Frontend (Vercel) | ✅ Live & styled | Tailwind/postcss fixed earlier |
+| Backend (Railway) | ✅ Live | All startup crashes resolved |
+| PostgreSQL (Railway) | ✅ Connected | `DATABASE_URL = ${{Postgres.DATABASE_URL}}` set on backend |
+| Migrations | ✅ Applied on boot | `start.sh` runs `alembic upgrade head` |
+| Admin user | ✅ Created | `sr9kanth@gmail.com` (administrator), login verified |
+| Redis / Celery worker | ⛔ **Not set up** | Railway usage expired — see options below |
+| S3 file storage | ⚠️ Vars set, untested | AWS creds on backend; upload flow not yet exercised |
+
+### Fixes landed this session (all on `claude/amazing-turing-8hAH3`)
+| Commit | Fix |
+|--------|-----|
+| `fa04eb2` | Rewrite `postgres://` → `postgresql+asyncpg://` for Railway |
+| `4e6075f` | CORS: hardcode Vercel origin so OPTIONS preflights pass |
+| `f8ab24c` | Lazy-import Celery task so the web app starts without Redis |
+| `d2ecefe` | Parse `CORS_ORIGINS` as a raw string (was crashing pydantic JSON decode at startup) |
+| `12bdc35` | Run `alembic upgrade head` on boot; alembic defaults to app `DATABASE_URL` |
+| `32971fa` | Pin `bcrypt==4.0.1` + truncate passwords to 72 bytes (passlib 1.7.4 compat) |
+
+### What's blocked & why
+**Redis + Celery worker** can't be added on Railway because the account's usage/trial expired.
+Background jobs (knowledge extraction, question generation, quality validation) need a broker
++ worker. Two ways forward — see **"Background jobs without Railway Redis"** and
+**"Fully Local Setup"** below. **Recommendation: run the whole stack locally** (next section) —
+it sidesteps usage limits entirely, keeps data private, and lets the M1 Max run a local LLM.
+
+---
+
 ## What this project is
 
 AIP is a full-stack AI-native platform for creating, managing, validating, and assembling assessment content (exam questions, competency frameworks, learning outcomes). Built for organisations that need structured, auditable, AI-assisted assessment authoring.
@@ -351,9 +384,10 @@ File uploads (`POST /knowledge/{id}/upload`) store to S3 and the worker reads th
 
 Easiest path: create an AWS S3 bucket (any region), generate an IAM key with `s3:PutObject`/`s3:GetObject` on that bucket, and fill in the three values (leave `AWS_ENDPOINT_URL` blank). Alternatively add a MinIO service on Railway and point `AWS_ENDPOINT_URL` at it.
 
-### 3. Create the first admin user
+### 3. Create the first admin user — ✅ DONE
 
-Run from anywhere with network access to the backend:
+The live admin account already exists: `sr9kanth@gmail.com` (administrator), login verified.
+To create additional users, run from anywhere with network access to the backend:
 
 ```bash
 EMAIL="you@example.com" PASSWORD="strong-password" FULL_NAME="Your Name" \
@@ -362,6 +396,10 @@ EMAIL="you@example.com" PASSWORD="strong-password" FULL_NAME="Your Name" \
 
 This POSTs to `/api/v1/auth/register` with `role: administrator` and verifies login. Then sign in at the frontend `/login`.
 
+> ⚠️ Steps 1 (Celery worker) and the Redis dependency are **blocked on Railway** while the
+> account's usage is expired. See **"Deployment Status"** at the top and the **"Fully Local
+> Setup"** section for the recommended way forward.
+
 ---
 
 ## Known Issues & Pending Work
@@ -369,9 +407,9 @@ This POSTs to `/api/v1/auth/register` with `role: administrator` and verifies lo
 ### High priority
 | Issue | Location | Status |
 |-------|----------|--------|
-| Celery worker not deployed | Railway project | Code ready (Procfile); **needs the dashboard step above** |
-| S3 bucket / env vars | Railway env vars | Code ready; **needs the dashboard step above** |
-| Knowledge content not used in generation | `backend/app/workers/tasks.py` | Upload now dispatches `process_knowledge_asset`; generation still uses a placeholder for source text — wire real extracted text next |
+| Redis + Celery worker | Railway project | **Blocked: Railway usage expired.** Run locally (recommended) or use external Redis — see "Background jobs" section |
+| S3 upload untested | Railway env vars | AWS creds set on backend; upload flow not yet exercised end-to-end |
+| Knowledge content in generation | `backend/app/workers/tasks.py` | ✅ Done (`a641d68`) — real extracted topics/concepts + S3 fallback now feed the agent |
 
 ### Medium priority
 | Issue | Location | Fix needed |
@@ -386,26 +424,106 @@ This POSTs to `/api/v1/auth/register` with `role: administrator` and verifies lo
 
 ---
 
-## Local Development
+## Fully Local Setup (recommended — private & no usage limits)
 
+The entire stack is already containerised in `docker-compose.yml`: **Postgres+pgvector,
+Redis, MinIO (S3-compatible), FastAPI backend, Celery worker, and the Next.js frontend.**
+Everything runs on your machine — no Railway, no Vercel, no cloud usage limits, and your
+data never leaves the laptop. Ideal for the M1 Max / 64 GB.
+
+### Prerequisites
+- **Docker Desktop** for Mac (Apple Silicon build)
+- (Optional, for fully-private AI) **Ollama** — https://ollama.com/download
+
+### One-command start
 ```bash
-# Start all services
-docker-compose up
+# from repo root
+cp .env.example .env          # then edit .env (see below)
+docker compose up --build
+```
+This brings up everything. Wait for all health checks to go green, then:
 
-# Backend only (with hot reload)
-cd backend
-pip install -r requirements.txt
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8000 |
+| API Docs | http://localhost:8000/docs |
+| MinIO console | http://localhost:9001 (user/pass: `minioadmin`/`minioadmin`) |
+
+> The backend container runs `start.sh`, which applies migrations automatically.
+> If you run uvicorn manually instead, run `alembic upgrade head` first.
+
+### Create the MinIO bucket (first run only)
+The app expects a bucket named `aip-assets`. Create it once:
+- Open the MinIO console (http://localhost:9001), log in, **Create Bucket** → `aip-assets`.
+- (Or `docker compose exec minio mc mb local/aip-assets` if `mc` is configured.)
+
+### Create your local admin user
+```bash
+API_URL="http://localhost:8000" EMAIL="you@example.com" \
+  PASSWORD="strong-password" FULL_NAME="You" ./scripts/create-admin.sh
+```
+
+### `.env` for local
+Most defaults in `.env.example` already point at the compose service names. Key choices:
+- **AI provider**: for a paid API set `LITELLM_DEFAULT_PROVIDER=deepseek` + `DEEPSEEK_API_KEY=...`.
+  For **fully local / private**, use Ollama (next section).
+- `CORS_ORIGINS=["http://localhost:3000"]` (already default)
+- `SECRET_KEY` — generate with `openssl rand -hex 32`
+
+### Fully-private AI with Ollama (no data leaves your machine)
+1. Install Ollama, then pull a strong model the M1 Max can run:
+   ```bash
+   ollama pull llama3.1:70b      # best quality on 64 GB; or llama3.1:8b for speed
+   ```
+2. In `.env`:
+   ```
+   LITELLM_DEFAULT_PROVIDER=ollama
+   LITELLM_DEFAULT_MODEL=ollama/llama3.1:70b
+   OLLAMA_BASE_URL=http://host.docker.internal:11434
+   ```
+   (`host.docker.internal` lets the backend container reach Ollama running on the host.)
+3. Restart: `docker compose up -d backend celery_worker`.
+
+Now generation, extraction, and validation all run through the local model — **end to end,
+fully offline** (except model download).
+
+### Running pieces individually (without Docker)
+```bash
+# Postgres + Redis + MinIO only (infra), app run natively
+docker compose -f docker-compose.dev.yml up -d
+
+# Backend (hot reload)
+cd backend && pip install -r requirements.txt
+alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 
-# Frontend only
-cd frontend
-npm install
-npm run dev
+# Celery worker (separate terminal)
+cd backend && celery -A app.workers.celery_app worker --loglevel=info
 
-# Celery worker
-cd backend
-celery -A app.workers.celery_app worker --loglevel=info
+# Frontend
+cd frontend && npm install
+echo 'NEXT_PUBLIC_API_URL=http://localhost:8000' > .env.local
+npm run dev
 ```
+
+### Is local better than fighting Railway usage limits?
+For this project — **yes, for development and private use.** You get the full pipeline
+(including Redis + the Celery worker, which Railway currently blocks), zero cloud cost, and
+data privacy. Keep the cloud deploy for sharing a demo URL; do real work locally. The two
+share the same codebase and migrations, so you can switch freely.
+
+---
+
+## Background jobs without Railway Redis (cloud-only path)
+
+If you want the **cloud** deploy to run generation without Railway Redis:
+1. **External managed Redis** — e.g. Upstash free tier. Create a DB, copy its `rediss://…`
+   URL, set `REDIS_URL` on the backend (literal value, not a `${{ }}` reference). Note:
+   `rediss://` (TLS) may need a Celery SSL tweak — flag this when revisiting.
+2. **Worker host** — Railway still can't run a second worker service while usage is expired.
+   Run the worker locally pointed at the cloud Postgres + Upstash Redis, or move generation
+   inline (synchronous in the request) as a fallback. Revisit when ready.
 
 ---
 
@@ -430,12 +548,18 @@ Monitor:
 
 ## Next Steps (Suggested Priority Order)
 
-1. **Add Celery worker service on Railway** — generation and quality validation won't work without it
-2. **Generate Alembic initial migration** — production schema management
-3. **Wire API data into frontend pages** — replace mock data with real `lib/api.ts` calls
-4. **Set up S3/MinIO** — enable file upload feature; add AWS_* env vars to Railway
-5. **Add first user** — POST to `/api/v1/auth/register` to create an admin account
-6. **Wire real knowledge content into generation** — replace placeholder in `tasks.py:107`
+Done this session: ✅ admin user, ✅ Alembic initial migration, ✅ frontend wired to live API,
+✅ real knowledge content in generation, ✅ DB connected, ✅ all startup crashes fixed.
+
+Remaining / when revisiting:
+1. **Stand up the background-job pipeline** — recommended: run the **full stack locally**
+   (`docker compose up`) which includes Redis + the worker. See "Fully Local Setup". This is
+   the unblock for generation/quality jobs.
+2. **(Optional, fully private)** point AI at **Ollama** (`llama3.1:70b`) on the M1 Max — no
+   data leaves the machine.
+3. **Verify S3 upload** — upload a knowledge asset and confirm the worker extracts it.
+4. **Cloud generation (later)** — external Redis (Upstash) + a worker host; mind the
+   `rediss://` TLS tweak for Celery.
 
 ---
 
