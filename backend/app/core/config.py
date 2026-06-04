@@ -1,4 +1,4 @@
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -36,7 +36,25 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = "http://localhost:11434"
 
     ENVIRONMENT: str = "development"
-    CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+    # Stored as a raw string (comma-separated or JSON) to avoid pydantic-settings
+    # auto JSON-decoding env vars. Use CORS_ORIGINS for the parsed list.
+    CORS_ORIGINS_RAW: str = Field(
+        default="http://localhost:3000",
+        validation_alias=AliasChoices("CORS_ORIGINS", "CORS_ORIGINS_RAW"),
+    )
+
+    @property
+    def CORS_ORIGINS(self) -> list[str]:
+        v = (self.CORS_ORIGINS_RAW or "").strip()
+        if not v:
+            return []
+        if v.startswith("["):
+            import json
+            try:
+                return json.loads(v)
+            except Exception:
+                pass
+        return [o.strip() for o in v.split(",") if o.strip()]
 
 
 settings = Settings()
