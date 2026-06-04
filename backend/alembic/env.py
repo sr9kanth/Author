@@ -26,6 +26,14 @@ config = context.config
 import os
 
 _override_url = os.getenv("ALEMBIC_DB_URL")
+if not _override_url:
+    # Fall back to the application's configured (and normalized) DATABASE_URL,
+    # so migrations target the same DB as the app in any environment.
+    try:
+        from app.core.config import settings as _settings
+        _override_url = _settings.DATABASE_URL
+    except Exception:
+        _override_url = None
 if _override_url:
     config.set_main_option("sqlalchemy.url", _override_url)
 
