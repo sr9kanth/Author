@@ -2,6 +2,8 @@ import json
 import uuid
 from datetime import datetime, timezone
 
+from app.core.config import settings
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,8 +27,8 @@ class GenerationService:
         job = GenerationJob(
             configuration_id=data.configuration_id,
             knowledge_asset_ids=data.knowledge_asset_ids,
-            ai_provider=data.ai_provider,
-            ai_model=data.ai_model,
+            ai_provider=data.ai_provider or settings.LITELLM_DEFAULT_PROVIDER,
+            ai_model=data.ai_model or settings.LITELLM_DEFAULT_MODEL,
             prompt_template=data.prompt_template,
             prompt_version=data.prompt_version,
             created_by=uuid.UUID(created_by),

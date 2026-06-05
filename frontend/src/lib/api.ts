@@ -216,4 +216,9 @@ export const qualityApi = {
     request<ValidationResult[]>(`/quality/content/${contentId}`),
 };
 
+// ---- Orchestration ----
+export const orchestrationApi = {
+  listModels: () => request<{ id: string; provider: string; context_window: number }[]>("/orchestration/models"),
+};
+
 export { ApiError };

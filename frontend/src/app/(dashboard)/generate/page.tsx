@@ -8,7 +8,7 @@ import { Tag } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { INPUT_CLS } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { frameworksApi, generationApi } from "@/lib/api";
+import { frameworksApi, generationApi, orchestrationApi } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
 import { Sparkles, ChevronDown, Check, ClipboardCheck, CheckCircle, AlertCircle } from "lucide-react";
 
@@ -45,7 +45,11 @@ export default function GeneratePage() {
     [fwData],
   );
 
+  const { data: modelData } = useAsync(() => orchestrationApi.listModels(), []);
+  const MODELS = useMemo(() => modelData ?? [], [modelData]);
+
   const [framework, setFramework] = useState("");
+  const [aiModel, setAiModel] = useState("");
   const [type, setType] = useState("Multiple Choice");
   const [count, setCount] = useState(25);
   const [difficulty, setDifficulty] = useState<Record<string, boolean>>({ Easy: true, Medium: true, Hard: false });
@@ -63,8 +67,11 @@ export default function GeneratePage() {
     setFailed(false);
     setProgress(10);
     try {
+      const selectedModel = MODELS.find((m) => m.id === aiModel);
       const job = await generationApi.createJob({
         configuration_id: framework || undefined,
+        ai_model: selectedModel?.id,
+        ai_provider: selectedModel?.provider,
       });
       setProgress(50);
       // Poll until terminal state.
@@ -110,6 +117,20 @@ export default function GeneratePage() {
                 <select value={framework} onChange={(e) => setFramework(e.target.value)} className={cn(INPUT_CLS, "appearance-none pr-10")}>
                   <option value="">Select a framework…</option>
                   {FRAMEWORKS.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </select>
+                <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
+              </div>
+            </Field>
+
+            <Field label="AI model" hint="Select the model to use for generation. Ollama models run locally.">
+              <div className="relative">
+                <select value={aiModel} onChange={(e) => setAiModel(e.target.value)} className={cn(INPUT_CLS, "appearance-none pr-10")}>
+                  <option value="">Default (system setting)</option>
+                  {MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.provider === "ollama" ? `🏠 ${m.id} (local)` : `${m.provider} / ${m.id}`}
+                    </option>
+                  ))}
                 </select>
                 <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
               </div>

@@ -12,8 +12,8 @@ class GenerationJobCreate(BaseModel):
 
     configuration_id: uuid.UUID | None = None
     knowledge_asset_ids: list[str] = []
-    ai_provider: str = "anthropic"
-    ai_model: str = "claude-opus-4-8"
+    ai_provider: str | None = None
+    ai_model: str | None = None
     prompt_template: str | None = None
     prompt_version: str = "1.0"
 
