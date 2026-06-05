@@ -77,6 +77,36 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// Multipart upload — must NOT set Content-Type so the browser adds the
+// multipart boundary itself. Mirrors request()'s auth/refresh handling.
+async function upload<T>(path: string, formData: FormData): Promise<T> {
+  let token = getAccessToken();
+
+  if (token && isTokenExpired(token)) {
+    token = await refreshAccessToken();
+  }
+
+  const res = await fetch(`${API_PREFIX}${path}`, {
+    method: "POST",
+    body: formData,
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const body = (await res.json()) as { detail?: string };
+      detail = body.detail ?? detail;
+    } catch {
+      // ignore
+    }
+    throw new ApiError(res.status, detail);
+  }
+
+  if (res.status === 204) return undefined as unknown as T;
+  return res.json() as Promise<T>;
+}
+
 // ---- Auth ----
 export const authApi = {
   login: (email: string, password: string) =>
@@ -101,6 +131,11 @@ export const knowledgeApi = {
   get: (id: string) => request<KnowledgeAsset>(`/knowledge/${id}`),
   create: (data: { title: string; description?: string; content_type: string }) =>
     request<KnowledgeAsset>("/knowledge", { method: "POST", body: JSON.stringify(data) }),
+  uploadFile: (id: string, file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return upload<KnowledgeAsset>(`/knowledge/${id}/upload`, fd);
+  },
   delete: (id: string) => request<void>(`/knowledge/${id}`, { method: "DELETE" }),
 };
 

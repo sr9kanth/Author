@@ -189,11 +189,11 @@ export function Segmented({
 }
 
 // ── FileUploadZone ───────────────────────────────────────────────────────────
-export function FileUploadZone({ onFiles }: { onFiles?: (names: string[]) => void }) {
+export function FileUploadZone({ onFiles }: { onFiles?: (files: File[]) => void }) {
   const [drag, setDrag] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const handle = (files: FileList | null) => {
-    if (onFiles && files && files.length) onFiles(Array.from(files).map((f) => f.name));
+    if (onFiles && files && files.length) onFiles(Array.from(files));
   };
   return (
     <div

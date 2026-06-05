@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { CARD } from "@/components/ui/card";
 import { PageHeader, EmptyState, FileUploadZone } from "@/components/ui/index";
 import { StatusBadge } from "@/components/ui/badge";
@@ -47,6 +47,27 @@ function chunkCount(a: KnowledgeAsset): number {
   return 0;
 }
 
+const EXT_TO_TYPE: Record<string, string> = {
+  pdf: "pdf",
+  doc: "docx",
+  docx: "docx",
+  ppt: "pptx",
+  pptx: "pptx",
+  xls: "xlsx",
+  xlsx: "xlsx",
+  csv: "csv",
+  htm: "html",
+  html: "html",
+  md: "markdown",
+  markdown: "markdown",
+  txt: "text",
+};
+
+function contentTypeForFile(name: string): string {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  return EXT_TO_TYPE[ext] ?? "text";
+}
+
 function typeStyle(t: string) {
   const m: Record<string, string> = {
     PDF: "bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300",
@@ -74,9 +95,27 @@ export default function KnowledgePage() {
     [data],
   );
 
-  const onFiles = () => {
-    // Upload handled elsewhere; refresh the list once files are queued.
-    reload();
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const onFiles = async (files: File[]) => {
+    setUploadError(null);
+    setUploading(true);
+    try {
+      for (const file of files) {
+        // Two-step flow: create the asset record, then attach the file.
+        const asset = await knowledgeApi.create({
+          title: file.name,
+          content_type: contentTypeForFile(file.name),
+        });
+        await knowledgeApi.uploadFile(asset.id, file);
+      }
+      reload();
+    } catch (err: unknown) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const remove = async (id: string) => {
@@ -101,6 +140,13 @@ export default function KnowledgePage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-5">
           <FileUploadZone onFiles={onFiles} />
+
+          {uploading && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">Uploading…</p>
+          )}
+          {uploadError && (
+            <p className="text-xs text-rose-600 dark:text-rose-400">{uploadError}</p>
+          )}
 
           <div className={cn(CARD, "overflow-hidden")}>
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-stone-100 dark:border-white/[0.05]">
