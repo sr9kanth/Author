@@ -25,6 +25,7 @@ def process_knowledge_asset(self, asset_id: str) -> dict:
 
     async def _inner():
         from app.core.database import AsyncSessionLocal
+        from app.modules.auth.models import User  # noqa: F401 — resolves KnowledgeAsset → User relationship
         from app.modules.knowledge.models import AssetStatus, KnowledgeAsset
         from app.modules.knowledge.extractor import ContentExtractor
         from app.modules.orchestration.service import AIOrchestrationService
