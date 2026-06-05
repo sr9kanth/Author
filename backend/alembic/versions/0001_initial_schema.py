@@ -34,6 +34,7 @@ def upgrade() -> None:
         "auditor",
         "read_only",
         name="userrole",
+                create_type=False,
     )
     userrole.create(op.get_bind(), checkfirst=True)
 
@@ -48,6 +49,7 @@ def upgrade() -> None:
         "markdown",
         "text",
         name="contenttype",
+                create_type=False,
     )
     contenttype.create(op.get_bind(), checkfirst=True)
 
@@ -57,6 +59,7 @@ def upgrade() -> None:
         "processed",
         "failed",
         name="assetstatus",
+                create_type=False,
     )
     assetstatus.create(op.get_bind(), checkfirst=True)
 
@@ -66,6 +69,7 @@ def upgrade() -> None:
         "completed",
         "failed",
         name="jobstatus",
+                create_type=False,
     )
     jobstatus.create(op.get_bind(), checkfirst=True)
 
@@ -78,6 +82,7 @@ def upgrade() -> None:
         "published",
         "archived",
         name="contentstatus",
+                create_type=False,
     )
     contentstatus.create(op.get_bind(), checkfirst=True)
 
@@ -90,6 +95,7 @@ def upgrade() -> None:
         "published",
         "archived",
         name="workflowstate",
+                create_type=False,
     )
     workflowstate.create(op.get_bind(), checkfirst=True)
 
@@ -112,6 +118,7 @@ def upgrade() -> None:
                 "auditor",
                 "read_only",
                 name="userrole",
+                create_type=False,
             ),
             nullable=False,
         ),
@@ -302,6 +309,7 @@ def upgrade() -> None:
                 "markdown",
                 "text",
                 name="contenttype",
+                create_type=False,
             ),
             nullable=False,
         ),
@@ -319,6 +327,7 @@ def upgrade() -> None:
                 "processed",
                 "failed",
                 name="assetstatus",
+                create_type=False,
             ),
             nullable=False,
         ),
@@ -399,6 +408,7 @@ def upgrade() -> None:
                 "completed",
                 "failed",
                 name="jobstatus",
+                create_type=False,
             ),
             nullable=False,
         ),
@@ -461,6 +471,7 @@ def upgrade() -> None:
                 "published",
                 "archived",
                 name="contentstatus",
+                create_type=False,
             ),
             nullable=False,
         ),
@@ -605,6 +616,7 @@ def upgrade() -> None:
                 "published",
                 "archived",
                 name="workflowstate",
+                create_type=False,
             ),
             nullable=False,
         ),
@@ -652,6 +664,7 @@ def upgrade() -> None:
                 "published",
                 "archived",
                 name="workflowstate",
+                create_type=False,
             ),
             nullable=False,
         ),
@@ -666,6 +679,7 @@ def upgrade() -> None:
                 "published",
                 "archived",
                 name="workflowstate",
+                create_type=False,
             ),
             nullable=False,
         ),
