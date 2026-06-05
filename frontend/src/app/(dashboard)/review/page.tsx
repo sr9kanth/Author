@@ -24,6 +24,7 @@ interface ReviewItem {
   options: { t: string; correct: boolean }[];
   rationale: string;
   flags: number;
+  stimulus?: { title: string; body: string };
 }
 
 function metaStr(meta: Record<string, unknown>, key: string): string {
@@ -59,6 +60,7 @@ function toReviewItem(c: GeneratedContent): ReviewItem {
     options,
     rationale: metaStr(meta, "rationale"),
     flags: typeof meta.flags === "number" ? meta.flags : 0,
+    stimulus: c.stimulus ? { title: c.stimulus.title, body: c.stimulus.body } : undefined,
   };
 }
 
@@ -238,6 +240,16 @@ function ReviewPageInner() {
                 <span>{active.outcome}</span>
               </div>
               <p className="text-[11.5px] text-stone-400 dark:text-stone-500 mb-5">{active.framework}</p>
+
+              {active.stimulus && (
+                <div className="rounded-xl border border-indigo-200 dark:border-indigo-500/30 bg-indigo-50/60 dark:bg-indigo-500/10 p-4 mb-6">
+                  <div className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300 mb-2">
+                    <BookOpen size={14} /> Stimulus
+                  </div>
+                  <p className="text-[14px] font-medium text-stone-900 dark:text-white mb-1.5">{active.stimulus.title}</p>
+                  <p className="text-[13.5px] leading-relaxed text-stone-700 dark:text-stone-300 whitespace-pre-line">{active.stimulus.body}</p>
+                </div>
+              )}
 
               <div className="space-y-1.5 mb-6">
                 <label className="text-[12px] font-medium uppercase tracking-wide text-stone-400 dark:text-stone-500">Stem</label>

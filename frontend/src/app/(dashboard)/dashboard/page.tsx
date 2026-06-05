@@ -38,22 +38,83 @@ function timeAgo(iso: string) {
   return days === 1 ? "Yesterday" : `${days} days ago`;
 }
 
-const data = [38, 52, 41, 67, 59, 78, 71, 90, 84, 96, 88, 104];
-const max = Math.max(...data);
+const PALETTE = ["#6366f1", "#8b5cf6", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#14b8a6"];
 
-function MiniBars() {
+type Segment = { label: string; count: number; color: string };
+
+function Donut({ segments, size = 132 }: { segments: Segment[]; size?: number }) {
+  const total = segments.reduce((s, seg) => s + seg.count, 0);
+  const stroke = 16;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  let offset = 0;
+
   return (
-    <div className="flex items-end gap-1.5 h-24">
-      {data.map((d, i) => (
-        <div
-          key={i}
-          className="flex-1 rounded-t-md bg-gradient-to-t from-indigo-500/70 to-violet-400/80 hover:from-indigo-500 hover:to-violet-400 transition-all"
-          style={{ height: `${(d / max) * 100}%` }}
-          title={`${d} items`}
-        />
-      ))}
+    <div className="flex items-center gap-4">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0 -rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} className="stroke-stone-100 dark:stroke-white/[0.06]" />
+        {total > 0 && segments.map((seg, i) => {
+          const len = (seg.count / total) * c;
+          const dash = `${len} ${c - len}`;
+          const el = (
+            <circle
+              key={i}
+              cx={size / 2}
+              cy={size / 2}
+              r={r}
+              fill="none"
+              stroke={seg.color}
+              strokeWidth={stroke}
+              strokeDasharray={dash}
+              strokeDashoffset={-offset}
+            >
+              <title>{`${seg.label}: ${seg.count}`}</title>
+            </circle>
+          );
+          offset += len;
+          return el;
+        })}
+      </svg>
+      <ul className="space-y-1.5 min-w-0">
+        {segments.map((seg, i) => (
+          <li key={i} className="flex items-center gap-2 text-[12.5px]">
+            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: seg.color }} />
+            <span className="text-stone-600 dark:text-stone-300 truncate capitalize">{seg.label.replace(/_/g, " ")}</span>
+            <span className="ml-auto font-semibold text-stone-900 dark:text-white tabular-nums">{seg.count}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
+}
+
+function Funnel({ stages }: { stages: { name: string; count: number }[] }) {
+  const max = Math.max(1, ...stages.map((s) => s.count));
+  return (
+    <div className="space-y-2">
+      {stages.map((s, i) => {
+        const pct = (s.count / max) * 100;
+        return (
+          <div key={s.name} className="flex items-center gap-3">
+            <span className="w-24 shrink-0 text-[12px] text-stone-500 dark:text-stone-400 text-right">{s.name}</span>
+            <div className="flex-1 h-7 rounded-md bg-stone-100 dark:bg-white/[0.05] overflow-hidden">
+              <div
+                className="h-full rounded-md bg-gradient-to-r from-indigo-500 to-violet-400 flex items-center justify-end px-2 transition-all"
+                style={{ width: `${Math.max(pct, s.count > 0 ? 6 : 0)}%`, opacity: 1 - i * 0.08 }}
+              >
+                {pct > 18 && <span className="text-[11px] font-semibold text-white tabular-nums">{s.count}</span>}
+              </div>
+            </div>
+            {pct <= 18 && <span className="w-8 text-[11px] font-semibold text-stone-700 dark:text-stone-200 tabular-nums">{s.count}</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function toSegments(slices: { label: string; count: number }[]): Segment[] {
+  return slices.map((s, i) => ({ ...s, color: PALETTE[i % PALETTE.length] }));
 }
 
 export default function DashboardPage() {
@@ -61,8 +122,15 @@ export default function DashboardPage() {
 
   const { data: stats, loading: statsLoading } = useAsync(() => dashboardApi.stats(), []);
   const { data: activity, loading: activityLoading } = useAsync(() => dashboardApi.activity(10), []);
+  const { data: analytics, loading: analyticsLoading } = useAsync(() => dashboardApi.analytics(), []);
 
   const activityItems = activity?.items ?? [];
+
+  const funnel = analytics?.funnel ?? [];
+  const byStatus = analytics?.by_status ?? [];
+  const byType = analytics?.by_type ?? [];
+  const byDifficulty = analytics?.by_difficulty ?? [];
+  const hasAnalytics = byStatus.some((s) => s.count > 0) || funnel.some((s) => s.count > 0);
 
   const quickActions = [
     { icon: Layers, accent: "from-indigo-500 to-indigo-600", title: "New framework", desc: "Define outcomes & competencies", href: "/frameworks" },
@@ -93,18 +161,55 @@ export default function DashboardPage() {
           <div className={cn(CARD, "p-5")}>
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h3 className="text-sm font-semibold text-stone-900 dark:text-white">Generation throughput</h3>
-                <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">Items produced per week — last 12 weeks</p>
+                <h3 className="text-sm font-semibold text-stone-900 dark:text-white">Content pipeline</h3>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">Items by stage across the generation workflow</p>
               </div>
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                <TrendingUp size={14} /> Trending up
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                <TrendingUp size={14} /> Pipeline
               </span>
             </div>
-            <MiniBars />
-            <div className="flex items-center justify-between mt-3 text-[11px] text-stone-400 dark:text-stone-500">
-              <span>Mar</span><span>Apr</span><span>May</span><span>Now</span>
-            </div>
+            {analyticsLoading ? (
+              <p className="text-[13px] text-stone-400 dark:text-stone-500 py-6">Loading analytics…</p>
+            ) : !hasAnalytics ? (
+              <EmptyState Icon={TrendingUp} title="No content yet" subtext="Generate items to see your pipeline analytics." />
+            ) : (
+              <Funnel stages={funnel} />
+            )}
           </div>
+
+          {!analyticsLoading && hasAnalytics && (
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className={cn(CARD, "p-5")}>
+                <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-4">By status</h3>
+                <Donut segments={toSegments(byStatus)} />
+              </div>
+              <div className={cn(CARD, "p-5")}>
+                <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-4">By type</h3>
+                {byType.length ? <Donut segments={toSegments(byType)} /> : <p className="text-[13px] text-stone-400 dark:text-stone-500">No data</p>}
+              </div>
+              <div className={cn(CARD, "p-5 sm:col-span-2")}>
+                <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-4">By difficulty</h3>
+                {byDifficulty.length ? (
+                  <ul className="space-y-2">
+                    {toSegments(byDifficulty).map((seg, i) => {
+                      const total = byDifficulty.reduce((s, d) => s + d.count, 0) || 1;
+                      return (
+                        <li key={i} className="flex items-center gap-3">
+                          <span className="w-24 shrink-0 text-[12.5px] text-stone-600 dark:text-stone-300 capitalize truncate">{seg.label.replace(/_/g, " ")}</span>
+                          <div className="flex-1 h-2.5 rounded-full bg-stone-100 dark:bg-white/[0.06] overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: `${(seg.count / total) * 100}%`, background: seg.color }} />
+                          </div>
+                          <span className="w-8 text-right text-[12.5px] font-semibold text-stone-900 dark:text-white tabular-nums">{seg.count}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="text-[13px] text-stone-400 dark:text-stone-500">No data</p>
+                )}
+              </div>
+            </div>
+          )}
 
           <div>
             <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-3">Quick actions</h3>

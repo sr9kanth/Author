@@ -20,3 +20,20 @@ class ActivityItem(BaseModel):
 
 class ActivityList(BaseModel):
     items: list[ActivityItem]
+
+
+class FunnelStage(BaseModel):
+    name: str
+    count: int
+
+
+class DistributionSlice(BaseModel):
+    label: str
+    count: int
+
+
+class DashboardAnalytics(BaseModel):
+    funnel: list[FunnelStage]
+    by_status: list[DistributionSlice]
+    by_type: list[DistributionSlice]
+    by_difficulty: list[DistributionSlice]

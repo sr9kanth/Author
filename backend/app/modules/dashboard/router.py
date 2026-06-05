@@ -1,7 +1,11 @@
 from fastapi import APIRouter
 
 from app.core.deps import CurrentUserID, DBSession
-from app.modules.dashboard.schemas import ActivityList, DashboardStats
+from app.modules.dashboard.schemas import (
+    ActivityList,
+    DashboardAnalytics,
+    DashboardStats,
+)
 from app.modules.dashboard.service import DashboardService
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -11,6 +15,12 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 async def get_stats(db: DBSession, current_user_id: CurrentUserID) -> DashboardStats:
     service = DashboardService(db)
     return await service.get_stats()
+
+
+@router.get("/analytics", response_model=DashboardAnalytics)
+async def get_analytics(db: DBSession, current_user_id: CurrentUserID) -> DashboardAnalytics:
+    service = DashboardService(db)
+    return await service.get_analytics()
 
 
 @router.get("/activity", response_model=ActivityList)

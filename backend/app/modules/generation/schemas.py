@@ -35,11 +35,32 @@ class GenerationJobRead(BaseModel):
     completed_at: datetime | None
 
 
+class StimulusCreate(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    title: str
+    body: str
+    stimulus_type: str = "scenario"
+
+
+class StimulusRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    title: str
+    body: str
+    stimulus_type: str
+    created_by: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+
+
 class GeneratedContentRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     job_id: uuid.UUID
+    stimulus_id: uuid.UUID | None = None
     content_type: str
     body: str
     content_metadata: dict[str, Any]
@@ -52,6 +73,7 @@ class GeneratedContentRead(BaseModel):
     validation_score: float | None
     created_at: datetime
     updated_at: datetime
+    stimulus: StimulusRead | None = None
 
 
 class GeneratedContentUpdate(BaseModel):

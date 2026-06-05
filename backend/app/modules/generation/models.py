@@ -47,11 +47,27 @@ class GenerationJob(Base):
     contents: Mapped[list["GeneratedContent"]] = relationship("GeneratedContent", back_populates="job", cascade="all, delete-orphan")
 
 
+class Stimulus(Base):
+    __tablename__ = "stimuli"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    stimulus_type: Mapped[str] = mapped_column(String(100), nullable=False, default="scenario")
+    created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    creator = relationship("User", foreign_keys=[created_by])
+    contents: Mapped[list["GeneratedContent"]] = relationship("GeneratedContent", back_populates="stimulus")
+
+
 class GeneratedContent(Base):
     __tablename__ = "generated_contents"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("generation_jobs.id"), nullable=False)
+    stimulus_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("stimuli.id"), nullable=True)
     content_type: Mapped[str] = mapped_column(String(100), nullable=False)  # question, answer, rationale
     body: Mapped[str] = mapped_column(Text, nullable=False)
     content_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
@@ -66,3 +82,4 @@ class GeneratedContent(Base):
     updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     job: Mapped[GenerationJob] = relationship("GenerationJob", back_populates="contents")
+    stimulus: Mapped["Stimulus | None"] = relationship("Stimulus", back_populates="contents")
