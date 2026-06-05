@@ -46,12 +46,26 @@ services:
       timeout: 20s
       retries: 3
 
+  createbucket:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin;
+      mc mb --ignore-existing local/aip-assets;
+      exit 0;
+      "
+
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://aip:aip@postgres:5432/aip
       REDIS_URL: redis://redis:6379/0
@@ -59,22 +73,21 @@ services:
       AWS_ACCESS_KEY_ID: minioadmin
       AWS_SECRET_ACCESS_KEY: minioadmin
       AWS_BUCKET_NAME: aip-assets
-    env_file:
-      - .env
+      ENVIRONMENT: production
+      CORS_ORIGINS: "http://localhost:3000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - ./backend:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   celery_worker:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
-    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
+      context: .
+      dockerfile: backend/Dockerfile
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2 --max-tasks-per-child=10
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://aip:aip@postgres:5432/aip
       REDIS_URL: redis://redis:6379/0
@@ -82,15 +95,11 @@ services:
       AWS_ACCESS_KEY_ID: minioadmin
       AWS_SECRET_ACCESS_KEY: minioadmin
       AWS_BUCKET_NAME: aip-assets
-    env_file:
-      - .env
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - ./backend:/app
 
   frontend:
     build:
