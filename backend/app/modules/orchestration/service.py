@@ -1,5 +1,6 @@
 """LiteLLM wrapper for multi-provider AI orchestration."""
 
+import os
 import time
 from typing import Any
 
@@ -15,15 +16,17 @@ class AIOrchestrationService:
     """Routes AI requests through LiteLLM to Claude, OpenAI, Gemini, or Ollama."""
 
     def __init__(self) -> None:
-        # Configure provider keys
+        # LiteLLM reads provider keys from environment variables, not from
+        # litellm.<provider>_key attributes (those are silent no-ops). Export
+        # whatever is configured so the chosen provider can authenticate.
         if settings.ANTHROPIC_API_KEY:
-            litellm.anthropic_key = settings.ANTHROPIC_API_KEY
+            os.environ["ANTHROPIC_API_KEY"] = settings.ANTHROPIC_API_KEY
         if settings.OPENAI_API_KEY:
-            litellm.openai_key = settings.OPENAI_API_KEY
+            os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
         if settings.GEMINI_API_KEY:
-            litellm.gemini_key = settings.GEMINI_API_KEY
+            os.environ["GEMINI_API_KEY"] = settings.GEMINI_API_KEY
         if settings.DEEPSEEK_API_KEY:
-            litellm.deepseek_key = settings.DEEPSEEK_API_KEY
+            os.environ["DEEPSEEK_API_KEY"] = settings.DEEPSEEK_API_KEY
 
     def _build_model_string(self, model: str | None, provider: str | None) -> str:
         effective_model = model or settings.LITELLM_DEFAULT_MODEL
@@ -50,6 +53,7 @@ class AIOrchestrationService:
     ) -> str:
         model_string = self._build_model_string(model, provider)
         start_ms = int(time.time() * 1000)
+        kwargs.setdefault("timeout", settings.AI_REQUEST_TIMEOUT)
         try:
             response = await litellm.acompletion(
                 model=model_string,
@@ -78,6 +82,7 @@ class AIOrchestrationService:
         **kwargs: Any,
     ) -> str:
         last_exc: Exception | None = None
+        kwargs.setdefault("timeout", settings.AI_REQUEST_TIMEOUT)
         for model_string in models:
             try:
                 response = await litellm.acompletion(model=model_string, messages=messages, **kwargs)

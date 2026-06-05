@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     DEEPSEEK_API_KEY: str = ""
     OLLAMA_BASE_URL: str = "http://localhost:11434"
+    AI_REQUEST_TIMEOUT: int = 60  # seconds; prevents worker tasks hanging on a stalled AI call
 
     ENVIRONMENT: str = "development"
     # Stored as a raw string (comma-separated or JSON) to avoid pydantic-settings

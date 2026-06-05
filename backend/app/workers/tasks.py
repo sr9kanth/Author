@@ -41,15 +41,24 @@ def process_knowledge_asset(self, asset_id: str) -> dict:
             if not asset:
                 return {"error": f"Asset {asset_id} not found"}
 
+            # Commit immediately so the UI durably sees "processing" before the
+            # long-running S3 + extraction + AI work (which may take a while).
             asset.status = AssetStatus.processing
-            await db.flush()
+            await db.commit()
 
             try:
+                from botocore.config import Config as BotoConfig
+
                 s3 = boto3.client(
                     "s3",
                     aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
                     aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
                     endpoint_url=settings.AWS_ENDPOINT_URL or None,
+                    config=BotoConfig(
+                        connect_timeout=10,
+                        read_timeout=60,
+                        retries={"max_attempts": 3},
+                    ),
                 )
                 obj = s3.get_object(Bucket=settings.AWS_BUCKET_NAME, Key=asset.storage_path)
                 file_bytes = obj["Body"].read()

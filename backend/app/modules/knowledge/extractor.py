@@ -61,10 +61,28 @@ class ContentExtractor:
             f"Text:\n{text[:4000]}"
         )
         messages = [{"role": "user", "content": prompt}]
+        response = await orchestration_service.complete(messages)
+        return self._parse_analysis(response)
+
+    @staticmethod
+    def _parse_analysis(response: str) -> dict:
+        """Parse the model's JSON reply, tolerating markdown code fences/prose."""
+        import json
+        import re
+
+        empty = {"topics": [], "concepts": [], "outcomes": [], "keywords": []}
+        if not response:
+            return empty
         try:
-            response = await orchestration_service.complete(messages)
-            import json
             return json.loads(response)
-        except Exception as exc:
-            logger.warning("AI extraction failed", error=str(exc))
-            return {"topics": [], "concepts": [], "outcomes": [], "keywords": []}
+        except json.JSONDecodeError:
+            # Models often wrap JSON in ```json fences or add prose; extract the
+            # first {...} block and retry.
+            match = re.search(r"\{.*\}", response, re.DOTALL)
+            if match:
+                try:
+                    return json.loads(match.group(0))
+                except json.JSONDecodeError:
+                    pass
+            logger.warning("AI extraction returned unparseable JSON", sample=response[:200])
+            return empty
