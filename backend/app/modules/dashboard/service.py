@@ -14,6 +14,9 @@ APPROVED_STATUSES = (
     ContentStatus.approved,
     ContentStatus.published,
 )
+REJECTED_STATUSES = (
+    ContentStatus.archived,
+)
 
 
 class DashboardService:
@@ -45,8 +48,17 @@ class DashboardService:
             )
         ).scalar_one()
 
+        rejected = (
+            await self.db.execute(
+                select(func.count(GeneratedContent.id)).where(
+                    GeneratedContent.status.in_(REJECTED_STATUSES)
+                )
+            )
+        ).scalar_one()
+
+        reviewed_total = approved + rejected
         approval_rate = (
-            round((approved / items_generated) * 100, 1) if items_generated else 0.0
+            round((approved / reviewed_total) * 100, 1) if reviewed_total else 0.0
         )
 
         return DashboardStats(
@@ -67,12 +79,12 @@ class DashboardService:
             )
         ).scalars().all()
         for row in content_rows:
-            summary = (row.body or "")[:120] or row.content_type
+            description = (row.body or "")[:120] or row.content_type
             activities.append(
                 ActivityItem(
                     id=row.id,
-                    kind="generated",
-                    summary=summary,
+                    type="generated",
+                    description=description,
                     created_at=row.created_at,
                 )
             )
@@ -93,8 +105,8 @@ class DashboardService:
                 activities.append(
                     ActivityItem(
                         id=ev.id,
-                        kind=to_state,
-                        summary=ev.notes or f"{from_state} -> {to_state}",
+                        type=to_state,
+                        description=ev.notes or f"{from_state} -> {to_state}",
                         created_at=ev.created_at,
                     )
                 )
