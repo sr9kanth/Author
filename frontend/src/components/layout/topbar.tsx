@@ -1,9 +1,10 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Search, Bell, Sun, Moon, ChevronRight } from "lucide-react";
+import { Search, Bell, Sun, Moon, ChevronRight, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { resetTour } from "@/components/layout/onboarding-tour";
 
 const PAGE_LABELS: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -51,6 +52,14 @@ export function Topbar() {
           ⌘K
         </kbd>
       </div>
+
+      <button
+        onClick={() => { resetTour(); window.location.reload(); }}
+        title="Replay tour"
+        className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-white/[0.06] hover:text-stone-800 dark:hover:text-stone-100 transition"
+      >
+        <HelpCircle size={18} />
+      </button>
 
       <button
         onClick={toggleDark}
