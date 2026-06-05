@@ -24,7 +24,7 @@ def process_knowledge_asset(self, asset_id: str) -> dict:
     logger.info("process_knowledge_asset_start", asset_id=asset_id)
 
     async def _inner():
-        from app.core.database import AsyncSessionLocal
+        from app.core.database import make_worker_session
         from app.modules.auth.models import User  # noqa: F401 — resolves KnowledgeAsset → User relationship
         from app.modules.knowledge.models import AssetStatus, KnowledgeAsset
         from app.modules.knowledge.extractor import ContentExtractor
@@ -35,7 +35,7 @@ def process_knowledge_asset(self, asset_id: str) -> dict:
 
         from app.core.config import settings
 
-        async with AsyncSessionLocal() as db:
+        async with make_worker_session()() as db:
             result = await db.execute(select(KnowledgeAsset).where(KnowledgeAsset.id == uuid.UUID(asset_id)))
             asset = result.scalar_one_or_none()
             if not asset:
@@ -92,14 +92,14 @@ def run_generation_job(self, job_id: str) -> dict:
     logger.info("run_generation_job_start", job_id=job_id)
 
     async def _inner():
-        from app.core.database import AsyncSessionLocal
+        from app.core.database import make_worker_session
         from app.modules.generation.models import GeneratedContent, GenerationJob, JobStatus
         from app.modules.orchestration.service import AIOrchestrationService
         from app.agents.assessment_agent import AssessmentAgent
         from sqlalchemy import select
         import uuid
 
-        async with AsyncSessionLocal() as db:
+        async with make_worker_session()() as db:
             result = await db.execute(select(GenerationJob).where(GenerationJob.id == uuid.UUID(job_id)))
             job = result.scalar_one_or_none()
             if not job:
@@ -247,13 +247,13 @@ def run_quality_validation(self, content_id: str) -> dict:
     logger.info("run_quality_validation_start", content_id=content_id)
 
     async def _inner():
-        from app.core.database import AsyncSessionLocal
+        from app.core.database import make_worker_session
         from app.modules.generation.models import GeneratedContent
         from app.modules.quality.service import QualityService
         from sqlalchemy import select
         import uuid
 
-        async with AsyncSessionLocal() as db:
+        async with make_worker_session()() as db:
             result = await db.execute(
                 select(GeneratedContent).where(GeneratedContent.id == uuid.UUID(content_id))
             )
