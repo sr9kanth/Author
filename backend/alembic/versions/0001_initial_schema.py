@@ -16,6 +16,33 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
+# Pre-declare enum type references with create_type=False so op.create_table
+# never tries to emit CREATE TYPE (we create them explicitly via op.execute).
+_userrole = postgresql.ENUM(
+    "administrator", "assessment_manager", "author", "reviewer", "auditor", "read_only",
+    name="userrole", create_type=False,
+)
+_contenttype = postgresql.ENUM(
+    "pdf", "docx", "pptx", "xlsx", "csv", "html", "url", "markdown", "text",
+    name="contenttype", create_type=False,
+)
+_assetstatus = postgresql.ENUM(
+    "uploaded", "processing", "processed", "failed",
+    name="assetstatus", create_type=False,
+)
+_jobstatus = postgresql.ENUM(
+    "pending", "running", "completed", "failed",
+    name="jobstatus", create_type=False,
+)
+_contentstatus = postgresql.ENUM(
+    "draft", "generated", "validated", "under_review", "approved", "published", "archived",
+    name="contentstatus", create_type=False,
+)
+_workflowstate = postgresql.ENUM(
+    "draft", "generated", "validated", "under_review", "approved", "published", "archived",
+    name="workflowstate", create_type=False,
+)
+
 
 def upgrade() -> None:
     # ---------------------------------------------------------------------------
@@ -80,20 +107,7 @@ def upgrade() -> None:
         sa.Column("email", sa.String(255), nullable=False),
         sa.Column("hashed_password", sa.String(255), nullable=False),
         sa.Column("full_name", sa.String(255), nullable=False),
-        sa.Column(
-            "role",
-            sa.Enum(
-                "administrator",
-                "assessment_manager",
-                "author",
-                "reviewer",
-                "auditor",
-                "read_only",
-                name="userrole",
-                create_type=False,
-            ),
-            nullable=False,
-        ),
+        sa.Column("role", _userrole, nullable=False),
         sa.Column("is_active", sa.Boolean(), nullable=False),
         sa.Column("mfa_enabled", sa.Boolean(), nullable=False),
         sa.Column(
@@ -268,41 +282,14 @@ def upgrade() -> None:
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("title", sa.String(500), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column(
-            "content_type",
-            sa.Enum(
-                "pdf",
-                "docx",
-                "pptx",
-                "xlsx",
-                "csv",
-                "html",
-                "url",
-                "markdown",
-                "text",
-                name="contenttype",
-                create_type=False,
-            ),
-            nullable=False,
-        ),
+        sa.Column("content_type", _contenttype, nullable=False),
         sa.Column("storage_path", sa.String(1000), nullable=True),
         sa.Column("file_size", sa.Integer(), nullable=True),
         sa.Column("extracted_topics", postgresql.JSON(astext_type=sa.Text()), nullable=True),
         sa.Column("extracted_concepts", postgresql.JSON(astext_type=sa.Text()), nullable=True),
         sa.Column("extracted_outcomes", postgresql.JSON(astext_type=sa.Text()), nullable=True),
         sa.Column("keywords", postgresql.JSON(astext_type=sa.Text()), nullable=True),
-        sa.Column(
-            "status",
-            sa.Enum(
-                "uploaded",
-                "processing",
-                "processed",
-                "failed",
-                name="assetstatus",
-                create_type=False,
-            ),
-            nullable=False,
-        ),
+        sa.Column("status", _assetstatus, nullable=False),
         sa.Column(
             "created_by",
             postgresql.UUID(as_uuid=True),
@@ -372,18 +359,7 @@ def upgrade() -> None:
     op.create_table(
         "generation_jobs",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column(
-            "status",
-            sa.Enum(
-                "pending",
-                "running",
-                "completed",
-                "failed",
-                name="jobstatus",
-                create_type=False,
-            ),
-            nullable=False,
-        ),
+        sa.Column("status", _jobstatus, nullable=False),
         sa.Column(
             "configuration_id",
             postgresql.UUID(as_uuid=True),
@@ -432,21 +408,7 @@ def upgrade() -> None:
         sa.Column("ai_provider", sa.String(100), nullable=False),
         sa.Column("ai_model", sa.String(200), nullable=False),
         sa.Column("prompt_version", sa.String(50), nullable=False),
-        sa.Column(
-            "status",
-            sa.Enum(
-                "draft",
-                "generated",
-                "validated",
-                "under_review",
-                "approved",
-                "published",
-                "archived",
-                name="contentstatus",
-                create_type=False,
-            ),
-            nullable=False,
-        ),
+        sa.Column("status", _contentstatus, nullable=False),
         sa.Column("validation_score", sa.Float(), nullable=True),
         sa.Column(
             "created_at",
@@ -577,21 +539,7 @@ def upgrade() -> None:
             sa.ForeignKey("generated_contents.id"),
             nullable=False,
         ),
-        sa.Column(
-            "current_state",
-            sa.Enum(
-                "draft",
-                "generated",
-                "validated",
-                "under_review",
-                "approved",
-                "published",
-                "archived",
-                name="workflowstate",
-                create_type=False,
-            ),
-            nullable=False,
-        ),
+        sa.Column("current_state", _workflowstate, nullable=False),
         sa.Column(
             "assigned_reviewer_id",
             postgresql.UUID(as_uuid=True),
@@ -625,36 +573,8 @@ def upgrade() -> None:
             sa.ForeignKey("review_workflows.id"),
             nullable=False,
         ),
-        sa.Column(
-            "from_state",
-            sa.Enum(
-                "draft",
-                "generated",
-                "validated",
-                "under_review",
-                "approved",
-                "published",
-                "archived",
-                name="workflowstate",
-                create_type=False,
-            ),
-            nullable=False,
-        ),
-        sa.Column(
-            "to_state",
-            sa.Enum(
-                "draft",
-                "generated",
-                "validated",
-                "under_review",
-                "approved",
-                "published",
-                "archived",
-                name="workflowstate",
-                create_type=False,
-            ),
-            nullable=False,
-        ),
+        sa.Column("from_state", _workflowstate, nullable=False),
+        sa.Column("to_state", _workflowstate, nullable=False),
         sa.Column(
             "triggered_by",
             postgresql.UUID(as_uuid=True),
