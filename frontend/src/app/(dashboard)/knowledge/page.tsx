@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CARD } from "@/components/ui/card";
 import { PageHeader, EmptyState, FileUploadZone } from "@/components/ui/index";
 import { StatusBadge } from "@/components/ui/badge";
@@ -80,6 +80,16 @@ function typeStyle(t: string) {
 
 export default function KnowledgePage() {
   const { data, loading, error, reload } = useAsync(() => knowledgeApi.list(0, 100), []);
+
+  // Auto-poll every 4s while any asset is still processing
+  useEffect(() => {
+    const hasProcessing = (data?.items ?? []).some(
+      (a) => a.status === "uploaded" || a.status === "processing",
+    );
+    if (!hasProcessing) return;
+    const t = setTimeout(reload, 4000);
+    return () => clearTimeout(t);
+  }, [data, reload]);
 
   const assets: Asset[] = useMemo(
     () =>
