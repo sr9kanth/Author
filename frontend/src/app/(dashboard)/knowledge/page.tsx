@@ -153,7 +153,10 @@ export default function KnowledgePage() {
               <h3 className="text-sm font-semibold text-stone-900 dark:text-white">
                 Sources <span className="text-stone-400 dark:text-stone-500 font-normal">· {assets.length}</span>
               </h3>
-              <button className="text-xs text-stone-400 dark:text-stone-500 hover:text-indigo-500 transition inline-flex items-center gap-1">
+              <button
+                onClick={() => reload()}
+                className="text-xs text-stone-400 dark:text-stone-500 hover:text-indigo-500 transition inline-flex items-center gap-1"
+              >
                 <RefreshCw size={13} /> Re-index all
               </button>
             </div>
