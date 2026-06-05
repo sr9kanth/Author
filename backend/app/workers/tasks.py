@@ -29,12 +29,13 @@ def process_knowledge_asset(self, asset_id: str) -> dict:
         from app.modules.knowledge.extractor import ContentExtractor
         from app.modules.orchestration.service import AIOrchestrationService
         import boto3
+        import uuid
         from sqlalchemy import select
 
         from app.core.config import settings
 
         async with AsyncSessionLocal() as db:
-            result = await db.execute(select(KnowledgeAsset).where(KnowledgeAsset.id == asset_id))
+            result = await db.execute(select(KnowledgeAsset).where(KnowledgeAsset.id == uuid.UUID(asset_id)))
             asset = result.scalar_one_or_none()
             if not asset:
                 return {"error": f"Asset {asset_id} not found"}
