@@ -83,8 +83,8 @@ class DashboardService:
             activities.append(
                 ActivityItem(
                     id=row.id,
-                    type="generated",
-                    description=description,
+                    kind="generated",
+                    summary=description,
                     created_at=row.created_at,
                 )
             )
@@ -105,8 +105,8 @@ class DashboardService:
                 activities.append(
                     ActivityItem(
                         id=ev.id,
-                        type=to_state,
-                        description=ev.notes or f"{from_state} -> {to_state}",
+                        kind=to_state,
+                        summary=ev.notes or f"{from_state} -> {to_state}",
                         created_at=ev.created_at,
                     )
                 )

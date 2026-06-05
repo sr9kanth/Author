@@ -72,6 +72,7 @@ export default function GeneratePage() {
         const current = await generationApi.getJob(job.id);
         if (current.status === "completed") {
           setProgress(100);
+          router.push(`/review?job=${job.id}`);
           return;
         }
         if (current.status === "failed") {

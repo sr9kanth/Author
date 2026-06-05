@@ -13,8 +13,8 @@ class DashboardStats(BaseModel):
 
 class ActivityItem(BaseModel):
     id: uuid.UUID
-    type: str
-    description: str
+    kind: str
+    summary: str
     created_at: datetime
 
 
