@@ -27,6 +27,7 @@ async def main():
             role="administrator",
         )
         user = await service.create_user(data)
+        await db.commit()
         print(f"Created admin user: {user.email}")
 
 asyncio.run(main())
