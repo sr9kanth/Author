@@ -33,7 +33,7 @@ const STEPS: Step[] = [
     href: "/frameworks",
     Icon: Layers,
     accent: "from-indigo-500 to-indigo-600",
-    tip: "Click "New framework" and give it a name and domain to get started.",
+    tip: "Click “New framework” and give it a name and domain to get started.",
   },
   {
     title: "2. Upload knowledge",
