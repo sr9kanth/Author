@@ -24,80 +24,52 @@ def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
     # ---------------------------------------------------------------------------
-    # Enum types
+    # Enum types  (DO/EXCEPTION so re-running is safe)
     # ---------------------------------------------------------------------------
-    userrole = postgresql.ENUM(
-        "administrator",
-        "assessment_manager",
-        "author",
-        "reviewer",
-        "auditor",
-        "read_only",
-        name="userrole",
-                create_type=False,
-    )
-    userrole.create(op.get_bind(), checkfirst=True)
-
-    contenttype = postgresql.ENUM(
-        "pdf",
-        "docx",
-        "pptx",
-        "xlsx",
-        "csv",
-        "html",
-        "url",
-        "markdown",
-        "text",
-        name="contenttype",
-                create_type=False,
-    )
-    contenttype.create(op.get_bind(), checkfirst=True)
-
-    assetstatus = postgresql.ENUM(
-        "uploaded",
-        "processing",
-        "processed",
-        "failed",
-        name="assetstatus",
-                create_type=False,
-    )
-    assetstatus.create(op.get_bind(), checkfirst=True)
-
-    jobstatus = postgresql.ENUM(
-        "pending",
-        "running",
-        "completed",
-        "failed",
-        name="jobstatus",
-                create_type=False,
-    )
-    jobstatus.create(op.get_bind(), checkfirst=True)
-
-    contentstatus = postgresql.ENUM(
-        "draft",
-        "generated",
-        "validated",
-        "under_review",
-        "approved",
-        "published",
-        "archived",
-        name="contentstatus",
-                create_type=False,
-    )
-    contentstatus.create(op.get_bind(), checkfirst=True)
-
-    workflowstate = postgresql.ENUM(
-        "draft",
-        "generated",
-        "validated",
-        "under_review",
-        "approved",
-        "published",
-        "archived",
-        name="workflowstate",
-                create_type=False,
-    )
-    workflowstate.create(op.get_bind(), checkfirst=True)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE userrole AS ENUM (
+                'administrator','assessment_manager','author','reviewer','auditor','read_only'
+            );
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE contenttype AS ENUM (
+                'pdf','docx','pptx','xlsx','csv','html','url','markdown','text'
+            );
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE assetstatus AS ENUM ('uploaded','processing','processed','failed');
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE jobstatus AS ENUM ('pending','running','completed','failed');
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE contentstatus AS ENUM (
+                'draft','generated','validated','under_review','approved','published','archived'
+            );
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE workflowstate AS ENUM (
+                'draft','generated','validated','under_review','approved','published','archived'
+            );
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$
+    """)
 
     # ---------------------------------------------------------------------------
     # Table: users
