@@ -1,14 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CARD } from "@/components/ui/card";
 import { PageHeader, EmptyState, SearchInput, Segmented } from "@/components/ui/index";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { INPUT_CLS } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { frameworksApi } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
-import { Plus, Filter, Folder, MoreHorizontal, ChevronUp, ChevronDown, ChevronsUpDown, Layers } from "lucide-react";
+import { Plus, Filter, Folder, MoreHorizontal, ChevronUp, ChevronDown, ChevronsUpDown, Layers, X } from "lucide-react";
 
 interface FrameworkRow {
   id: string;
@@ -21,6 +22,135 @@ interface FrameworkRow {
   updated: string;
 }
 
+interface NewFrameworkModalProps {
+  onClose: () => void;
+  onCreated: () => void;
+}
+
+function NewFrameworkModal({ onClose, onCreated }: NewFrameworkModalProps) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [version, setVersion] = useState("1.0");
+  const [domain, setDomain] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    nameRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await frameworksApi.create({
+        name: name.trim(),
+        description: description.trim() || undefined,
+        version: version.trim() || "1.0",
+      });
+      onCreated();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className={cn(CARD, "w-full max-w-lg p-6 flex flex-col gap-5")}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-stone-900 dark:text-white">New framework</h2>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-white/[0.06] transition"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-[13px] font-medium text-stone-700 dark:text-stone-200">
+              Name <span className="text-rose-500">*</span>
+            </label>
+            <input
+              ref={nameRef}
+              className={INPUT_CLS}
+              placeholder="e.g. Software Engineering Competencies"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              disabled={saving}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[13px] font-medium text-stone-700 dark:text-stone-200">Description</label>
+            <textarea
+              className={cn(INPUT_CLS, "resize-none min-h-[80px]")}
+              placeholder="Brief description of this framework…"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              disabled={saving}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-[13px] font-medium text-stone-700 dark:text-stone-200">Version</label>
+              <input
+                className={INPUT_CLS}
+                placeholder="1.0"
+                value={version}
+                onChange={(e) => setVersion(e.target.value)}
+                disabled={saving}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[13px] font-medium text-stone-700 dark:text-stone-200">Domain</label>
+              <input
+                className={INPUT_CLS}
+                placeholder="e.g. Engineering"
+                value={domain}
+                onChange={(e) => setDomain(e.target.value)}
+                disabled={saving}
+              />
+            </div>
+          </div>
+
+          {error && (
+            <p className="text-sm text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="secondary" size="md" onClick={onClose} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="submit" Icon={Plus} size="md" disabled={saving || !name.trim()}>
+              {saving ? "Creating…" : "Create framework"}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function fmtDate(iso: string) {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "—";
@@ -31,8 +161,9 @@ export default function FrameworksPage() {
   const [query, setQuery] = useState("");
   const [domain, setDomain] = useState("All domains");
   const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: "updated", dir: "desc" });
+  const [showNewModal, setShowNewModal] = useState(false);
 
-  const { data, loading, error } = useAsync(() => frameworksApi.list(0, 100), []);
+  const { data, loading, error, reload } = useAsync(() => frameworksApi.list(0, 100), []);
 
   const frameworks: FrameworkRow[] = useMemo(
     () =>
@@ -87,12 +218,18 @@ export default function FrameworksPage() {
 
   return (
     <div>
+      {showNewModal && (
+        <NewFrameworkModal
+          onClose={() => setShowNewModal(false)}
+          onCreated={reload}
+        />
+      )}
       <PageHeader
         title="Frameworks"
         description="Competency frameworks and learning-outcome maps that structure your generated content."
       >
         <Button variant="secondary" Icon={Filter} size="md">Import</Button>
-        <Button Icon={Plus}>New framework</Button>
+        <Button Icon={Plus} onClick={() => setShowNewModal(true)}>New framework</Button>
       </PageHeader>
 
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
@@ -120,7 +257,7 @@ export default function FrameworksPage() {
                 ? "Frameworks organise your learning outcomes and competencies. Create one to start generating aligned assessment content."
                 : "Try adjusting your search or domain filter."
             }
-            action={isEmpty ? <Button Icon={Plus}>Create your first framework</Button> : null}
+            action={isEmpty ? <Button Icon={Plus} onClick={() => setShowNewModal(true)}>Create your first framework</Button> : null}
           />
         ) : (
           <div className="overflow-x-auto">
