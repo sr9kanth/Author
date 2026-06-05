@@ -58,3 +58,20 @@ async def init_db() -> None:
         for type_name in ("userrole", "contenttype", "assetstatus", "jobstatus", "contentstatus", "workflowstate"):
             await conn.execute(sa.text(f"DROP TYPE IF EXISTS {type_name} CASCADE"))
         await conn.run_sync(Base.metadata.create_all)
+
+
+async def create_missing_tables() -> None:
+    """Idempotently create any tables/enums not yet present.
+
+    Runs after Alembic on every boot. create_all uses checkfirst=True, so it
+    only creates objects that don't already exist — existing tables and data
+    are untouched. This lets newly-added models get their tables without a
+    migration, which is what local Docker dev relies on.
+    """
+    import sqlalchemy as sa
+    # Import all model modules so every table is registered on Base.metadata.
+    import app.models  # noqa: F401
+
+    async with async_engine.begin() as conn:
+        await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS vector"))
+        await conn.run_sync(Base.metadata.create_all)

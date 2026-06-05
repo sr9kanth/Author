@@ -10,6 +10,14 @@ asyncio.run(init_db())
 print('init_db() complete')
 "
 }
+# Idempotently create any tables added by new feature modules (no migration needed)
+python -c "
+import asyncio
+from app.core.database import create_missing_tables
+asyncio.run(create_missing_tables())
+print('create_missing_tables() complete')
+" || echo "WARNING: create_missing_tables failed"
+
 # Seed admin user (no-op if already exists)
 python seed_admin.py || echo "WARNING: seed_admin failed"
 
