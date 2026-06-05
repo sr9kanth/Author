@@ -7,13 +7,13 @@ from app.modules.repository.service import RepositoryService
 router = APIRouter(prefix="/repository", tags=["repository"])
 
 
-@router.post("/", response_model=AssessmentItemRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=AssessmentItemRead, status_code=status.HTTP_201_CREATED)
 async def add_item(data: AssessmentItemCreate, current_user_id: CurrentUserID, db: DBSession) -> AssessmentItemRead:
     service = RepositoryService(db)
     return await service.add_item(data, current_user_id)
 
 
-@router.get("/", response_model=AssessmentItemList)
+@router.get("", response_model=AssessmentItemList)
 async def list_items(db: DBSession, current_user_id: CurrentUserID, skip: int = 0, limit: int = 20) -> AssessmentItemList:
     service = RepositoryService(db)
     return await service.list_items(skip=skip, limit=limit)

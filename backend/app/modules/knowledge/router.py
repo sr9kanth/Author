@@ -7,7 +7,7 @@ from app.modules.knowledge.service import KnowledgeService
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
 
-@router.post("/", response_model=KnowledgeAssetRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=KnowledgeAssetRead, status_code=status.HTTP_201_CREATED)
 async def create_asset(data: KnowledgeAssetCreate, current_user_id: CurrentUserID, db: DBSession) -> KnowledgeAssetRead:
     service = KnowledgeService(db)
     try:
@@ -33,7 +33,7 @@ async def upload_file(asset_id: str, file: UploadFile, current_user_id: CurrentU
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
 
-@router.get("/", response_model=KnowledgeAssetList)
+@router.get("", response_model=KnowledgeAssetList)
 async def list_assets(db: DBSession, current_user_id: CurrentUserID, skip: int = 0, limit: int = 20) -> KnowledgeAssetList:
     service = KnowledgeService(db)
     return await service.list_assets(skip=skip, limit=limit)

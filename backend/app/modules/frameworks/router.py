@@ -7,13 +7,13 @@ from app.modules.frameworks.service import FrameworkService
 router = APIRouter(prefix="/frameworks", tags=["frameworks"])
 
 
-@router.post("/", response_model=FrameworkRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=FrameworkRead, status_code=status.HTTP_201_CREATED)
 async def create_framework(data: FrameworkCreate, current_user_id: CurrentUserID, db: DBSession) -> FrameworkRead:
     service = FrameworkService(db)
     return await service.create_framework(data, current_user_id)
 
 
-@router.get("/", response_model=FrameworkList)
+@router.get("", response_model=FrameworkList)
 async def list_frameworks(db: DBSession, current_user_id: CurrentUserID, skip: int = 0, limit: int = 20) -> FrameworkList:
     service = FrameworkService(db)
     return await service.list_frameworks(skip=skip, limit=limit)

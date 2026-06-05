@@ -12,13 +12,13 @@ from app.modules.assembly.service import AssemblyService
 router = APIRouter(prefix="/assembly", tags=["assembly"])
 
 
-@router.post("/", response_model=AssessmentPackageRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=AssessmentPackageRead, status_code=status.HTTP_201_CREATED)
 async def create_package(data: AssessmentPackageCreate, current_user_id: CurrentUserID, db: DBSession) -> AssessmentPackageRead:
     service = AssemblyService(db)
     return await service.create_package(data, current_user_id)
 
 
-@router.get("/", response_model=AssessmentPackageList)
+@router.get("", response_model=AssessmentPackageList)
 async def list_packages(db: DBSession, current_user_id: CurrentUserID, skip: int = 0, limit: int = 20) -> AssessmentPackageList:
     service = AssemblyService(db)
     return await service.list_packages(skip=skip, limit=limit)

@@ -12,13 +12,13 @@ from app.modules.assessment_config.service import AssessmentConfigService
 router = APIRouter(prefix="/configurations", tags=["assessment-config"])
 
 
-@router.post("/", response_model=AssessmentConfigurationRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=AssessmentConfigurationRead, status_code=status.HTTP_201_CREATED)
 async def create_config(data: AssessmentConfigurationCreate, current_user_id: CurrentUserID, db: DBSession) -> AssessmentConfigurationRead:
     service = AssessmentConfigService(db)
     return await service.create_config(data, current_user_id)
 
 
-@router.get("/", response_model=AssessmentConfigurationList)
+@router.get("", response_model=AssessmentConfigurationList)
 async def list_configs(db: DBSession, current_user_id: CurrentUserID, skip: int = 0, limit: int = 20) -> AssessmentConfigurationList:
     service = AssessmentConfigService(db)
     return await service.list_configs(skip=skip, limit=limit)
