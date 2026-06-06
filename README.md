@@ -10,9 +10,9 @@ An AI-powered platform for authoring, reviewing, and managing educational assess
 | Frontend | Next.js 14 (App Router, TypeScript, Tailwind CSS) |
 | Database | PostgreSQL 16 + pgvector |
 | Queue | Celery 5 + Redis 7 |
-| Auth | JWT (with Keycloak integration stubs) |
+| Auth | JWT (bcrypt password hashing; Keycloak integration stubs) |
 | Storage | S3-compatible via boto3 (MinIO for local dev) |
-| AI Orchestration | LiteLLM (Claude, OpenAI, Gemini, Ollama) |
+| AI Orchestration | LiteLLM (Claude, OpenAI, Gemini, DeepSeek, Ollama) |
 
 ## Prerequisites
 
@@ -32,16 +32,18 @@ cp .env.example .env
 ### 2. Start all services
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-### 3. Apply database migrations
+Database setup runs automatically on backend boot (`backend/start.sh`):
+Alembic migrations → `create_missing_tables()` for any new feature modules →
+admin user seed. No manual migration step is required for local development.
 
-```bash
-docker compose exec backend alembic upgrade head
-```
+> **Production note:** the app refuses to start with `ENVIRONMENT=production`
+> unless a strong `SECRET_KEY` is set (e.g. `openssl rand -hex 32`). Local
+> compose runs as `development` with a throwaway key.
 
-### 4. Access the platform
+### 3. Access the platform
 
 | Service | URL |
 |---------|-----|
@@ -70,12 +72,27 @@ cd backend
 celery -A app.workers.celery_app worker --loglevel=debug
 ```
 
+## Frontend ↔ Backend networking
+
+The frontend never calls the backend cross-origin. All API calls go to a
+**same-origin proxy** path (`/api/proxy/v1/*`) which the Next.js server
+rewrites to the backend (`next.config.mjs` → `BACKEND_URL`, default
+`http://backend:8000` in Docker). This eliminates CORS as a failure mode for
+create/upload/fetch. Backend CORS is still configured (allow-list via
+`CORS_ORIGINS`) for direct API/tooling access.
+
 ## Running Tests
 
 ```bash
 cd backend
-pytest tests/ -v
+pytest tests/ -v            # full suite (needs Postgres + Redis)
+pytest tests/test_security.py -v   # DB-free auth/bcrypt unit tests
 ```
+
+CI (`.github/workflows/deploy.yml`) runs on **every branch**: the backend
+suite against Postgres + Redis, and the frontend `tsc --noEmit` + build.
+Smoke tests cover login, framework/knowledge/generation creation, and
+password hashing so a dependency bump can't silently break auth.
 
 ## Architecture Overview
 
