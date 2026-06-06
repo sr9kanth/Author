@@ -1,25 +1,32 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# We call bcrypt directly rather than through passlib. passlib 1.7.4 is
+# unmaintained and its bcrypt backend raises on bcrypt >= 4.1 (e.g.
+# "password cannot be longer than 72 bytes" / missing __about__), which
+# surfaced as 500s on login. bcrypt's hashpw/checkpw API is stable across
+# versions and verifies existing $2b$ passlib-generated hashes unchanged.
 
 
-def _bcrypt_safe(password: str) -> str:
-    # bcrypt only considers the first 72 bytes; truncate to avoid backend errors.
-    return password.encode("utf-8")[:72].decode("utf-8", "ignore")
+def _bcrypt_bytes(password: str) -> bytes:
+    # bcrypt only considers the first 72 bytes; truncate to avoid errors.
+    return password.encode("utf-8")[:72]
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(_bcrypt_safe(password))
+    return bcrypt.hashpw(_bcrypt_bytes(password), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(_bcrypt_safe(plain_password), hashed_password)
+    try:
+        return bcrypt.checkpw(_bcrypt_bytes(plain_password), hashed_password.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False
 
 
 def create_access_token(subject: str | Any, extra_claims: dict | None = None) -> str:
