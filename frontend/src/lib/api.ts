@@ -17,8 +17,12 @@ import type {
   ValidationResult,
 } from "@/types";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const API_PREFIX = `${BASE_URL}/api/v1`;
+// Same-origin proxy: all API calls go through the Next.js server
+// (see next.config.mjs rewrites), which forwards to the backend. This
+// eliminates cross-origin requests entirely, so CORS can never break
+// create/upload/fetch operations. Works identically in local Docker and
+// in production as long as BACKEND_URL is set on the frontend service.
+const API_PREFIX = "/api/proxy/v1";
 
 class ApiError extends Error {
   constructor(

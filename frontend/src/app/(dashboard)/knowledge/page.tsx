@@ -20,6 +20,7 @@ interface Asset {
   name: string;
   type: string;
   size: string;
+  bytes: number;
   chunks: number;
   status: DisplayStatus;
   uploaded: string;
@@ -119,6 +120,7 @@ export default function KnowledgePage() {
         name: a.title,
         type: a.content_type.toUpperCase().slice(0, 4),
         size: fmtSize(a.file_size),
+        bytes: a.file_size ?? 0,
         chunks: chunkCount(a),
         status: displayStatus(a.status),
         uploaded: a.created_at,
@@ -162,7 +164,10 @@ export default function KnowledgePage() {
   const totals = {
     indexed: assets.filter((a) => a.status === "indexed").length,
     chunks: assets.reduce((s, a) => s + a.chunks, 0),
+    bytes: assets.reduce((s, a) => s + a.bytes, 0),
   };
+
+  const indexedPct = assets.length ? Math.round((totals.indexed / assets.length) * 100) : 0;
 
   return (
     <div>
@@ -258,7 +263,7 @@ export default function KnowledgePage() {
                   <span className="text-xs text-stone-400 dark:text-stone-500">chunks embedded</span>
                 </div>
                 <div className="h-1.5 rounded-full bg-stone-100 dark:bg-white/[0.06] overflow-hidden">
-                  <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500" style={{ width: "78%" }} />
+                  <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500" style={{ width: `${indexedPct}%` }} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 pt-1">
@@ -267,7 +272,7 @@ export default function KnowledgePage() {
                   <div className="text-[11.5px] text-stone-500 dark:text-stone-400">Indexed</div>
                 </div>
                 <div className="rounded-xl bg-stone-50 dark:bg-white/[0.03] p-3">
-                  <div className="text-xl font-semibold text-stone-900 dark:text-white tabular-nums">6.2<span className="text-sm font-normal text-stone-400"> GB</span></div>
+                  <div className="text-xl font-semibold text-stone-900 dark:text-white tabular-nums">{totals.bytes > 0 ? fmtSize(totals.bytes) : "0 B"}</div>
                   <div className="text-[11.5px] text-stone-500 dark:text-stone-400">Storage used</div>
                 </div>
               </div>
