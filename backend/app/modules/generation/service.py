@@ -94,5 +94,7 @@ class GenerationService:
         for field, value in data.model_dump(exclude_none=True).items():
             setattr(content, field, value)
         await self.db.flush()
-        await self.db.refresh(content)
+        # Eagerly load `stimulus` so model_validate doesn't trigger an async
+        # lazy-load (MissingGreenlet → 500).
+        await self.db.refresh(content, attribute_names=["stimulus"])
         return GeneratedContentRead.model_validate(content)

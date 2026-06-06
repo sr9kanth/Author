@@ -79,7 +79,9 @@ class FrameworkService:
         )
         self.db.add(framework)
         await self.db.flush()
-        await self.db.refresh(framework)
+        # Eagerly load the `domains` relationship so _enrich/model_validate
+        # don't trigger an async lazy-load (which raises MissingGreenlet → 500).
+        await self.db.refresh(framework, attribute_names=["domains"])
         return await self._enrich(framework)
 
     async def list_frameworks(self, skip: int = 0, limit: int = 20) -> FrameworkList:
