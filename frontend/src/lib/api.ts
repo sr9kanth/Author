@@ -13,8 +13,12 @@ import type {
   KnowledgeAsset,
   MetadataDimension,
   PaginatedList,
+  ReviewComment,
   User,
   ValidationResult,
+  WorkflowEvent,
+  WorkflowState,
+  WorkflowStatus,
 } from "@/types";
 
 // Same-origin proxy: all API calls go through the Next.js server
@@ -153,6 +157,7 @@ export const frameworksApi = {
   get: (id: string) => request<Framework>(`/frameworks/${id}`),
   create: (data: { name: string; description?: string; version?: string }) =>
     request<Framework>("/frameworks", { method: "POST", body: JSON.stringify(data) }),
+  delete: (id: string) => request<void>(`/frameworks/${id}`, { method: "DELETE" }),
 };
 
 // ---- Configurations ----
@@ -165,6 +170,12 @@ export const configurationsApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  update: (id: string, data: Partial<AssessmentConfiguration>) =>
+    request<AssessmentConfiguration>(`/configurations/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) => request<void>(`/configurations/${id}`, { method: "DELETE" }),
 };
 
 // ---- Generation ----
@@ -229,6 +240,26 @@ export const repositoryApi = {
   list: (skip = 0, limit = 20) =>
     request<PaginatedList<AssessmentItem>>(`/repository?skip=${skip}&limit=${limit}`),
   get: (id: string) => request<AssessmentItem>(`/repository/${id}`),
+  create: (data: { content_id: string; item_code?: string; tags?: string[]; notes?: string }) =>
+    request<AssessmentItem>("/repository", { method: "POST", body: JSON.stringify(data) }),
+};
+
+// ---- Workflow ----
+export const workflowApi = {
+  get: (contentId: string) =>
+    request<WorkflowStatus>(`/workflow/content/${contentId}`),
+  transition: (contentId: string, toState: WorkflowState, notes?: string) =>
+    request<WorkflowStatus>(`/workflow/content/${contentId}/transition`, {
+      method: "POST",
+      body: JSON.stringify({ to_state: toState, notes }),
+    }),
+  events: (contentId: string) =>
+    request<WorkflowEvent[]>(`/workflow/content/${contentId}/events`),
+  addComment: (contentId: string, body: string) =>
+    request<ReviewComment>(`/workflow/content/${contentId}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    }),
 };
 
 // ---- Assembly ----

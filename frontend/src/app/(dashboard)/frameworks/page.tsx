@@ -312,6 +312,49 @@ function fmtDate(iso: string) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+interface RowMenuProps {
+  onDelete: () => void;
+}
+
+function RowMenu({ onDelete }: RowMenuProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+        className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-white/[0.06] transition"
+      >
+        <MoreHorizontal size={17} />
+      </button>
+      {open && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute right-0 mt-1 z-20 w-40 rounded-xl border border-stone-200/80 dark:border-white/[0.08] bg-white dark:bg-stone-900 shadow-lg py-1"
+        >
+          <button
+            onClick={(e) => { e.stopPropagation(); setOpen(false); onDelete(); }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-left text-[13px] text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
+          >
+            <Trash2 size={14} />
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function FrameworksPage() {
   const [query, setQuery] = useState("");
   const [domain, setDomain] = useState("All domains");
@@ -358,6 +401,16 @@ export default function FrameworksPage() {
     if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
     return String(va).localeCompare(String(vb)) * dir;
   });
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!window.confirm(`Delete framework "${name}"? This cannot be undone.`)) return;
+    try {
+      await frameworksApi.delete(id);
+      reload();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Failed to delete framework");
+    }
+  };
 
   const isEmpty = !loading && frameworks.length === 0;
 
@@ -484,12 +537,7 @@ export default function FrameworksPage() {
                           <BookOpen size={14} />
                           Guides
                         </button>
-                        <button
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-white/[0.06] transition"
-                        >
-                          <MoreHorizontal size={17} />
-                        </button>
+                        <RowMenu onDelete={() => handleDelete(f.id, f.name)} />
                       </div>
                     </td>
                   </tr>

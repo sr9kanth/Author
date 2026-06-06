@@ -14,6 +14,7 @@ import { Download, Package, Copy, Eye, Plus, Search, FileQuestion, LayoutDashboa
 
 interface RepoRow {
   id: string;
+  itemCode: string;
   stem: string;
   type: string;
   bloom: string;
@@ -54,6 +55,7 @@ export default function RepositoryPage() {
     () =>
       (data?.items ?? []).map((r) => ({
         id: r.id,
+        itemCode: r.item_code,
         stem: r.stem ?? r.item_code,
         type: r.type ?? "Item",
         bloom: r.bloom ?? "—",
@@ -75,13 +77,40 @@ export default function RepositoryPage() {
 
   const isEmpty = !loading && repository.length === 0;
 
+  function exportCsv() {
+    if (rows.length === 0) return;
+    const headers = ["item_code", "type", "bloom", "difficulty", "topic", "stem", "tags", "usage_count"];
+    const escape = (val: unknown) => {
+      const s = val == null ? "" : String(val);
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [
+      headers.join(","),
+      ...rows.map((r) =>
+        [r.itemCode, r.type, r.bloom, r.difficulty, r.topic, r.stem, r.tags.join("; "), r.usage]
+          .map(escape)
+          .join(","),
+      ),
+    ];
+    const csv = lines.join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "repository.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div>
       <PageHeader
         title="Repository"
         description="Your approved, reusable assessment items. Search and filter the bank, then send items to Assembly."
       >
-        <Button variant="secondary" Icon={Download}>Export</Button>
+        <Button variant="secondary" Icon={Download} onClick={exportCsv} disabled={rows.length === 0}>Export</Button>
         <Button Icon={Package} onClick={() => router.push("/assembly")}>Build package</Button>
       </PageHeader>
 

@@ -11,9 +11,184 @@ import { useAsync } from "@/lib/use-async";
 import { DetailPanel, useDetailPanel } from "@/components/ui/detail-panel";
 import { Tag } from "@/components/ui/badge";
 import type { KnowledgeAsset } from "@/types";
-import { Settings, FileText, RefreshCw, Trash2, Sparkles, Database } from "lucide-react";
+import { Settings, FileText, RefreshCw, Trash2, Sparkles, Database, X } from "lucide-react";
 
 type DisplayStatus = "indexed" | "processing" | "failed";
+
+// ── Index settings (client-side preferences, persisted in localStorage) ──────
+const INDEX_SETTINGS_KEY = "aip_index_settings";
+
+interface IndexSettings {
+  chunkSize: number;
+  chunkOverlap: number;
+  embeddingModel: string;
+  autoReindex: boolean;
+}
+
+const DEFAULT_INDEX_SETTINGS: IndexSettings = {
+  chunkSize: 512,
+  chunkOverlap: 64,
+  embeddingModel: "text-embedding-3-small",
+  autoReindex: true,
+};
+
+function loadIndexSettings(): IndexSettings {
+  if (typeof window === "undefined") return DEFAULT_INDEX_SETTINGS;
+  try {
+    const raw = window.localStorage.getItem(INDEX_SETTINGS_KEY);
+    if (!raw) return DEFAULT_INDEX_SETTINGS;
+    return { ...DEFAULT_INDEX_SETTINGS, ...JSON.parse(raw) };
+  } catch {
+    return DEFAULT_INDEX_SETTINGS;
+  }
+}
+
+const EMBEDDING_MODELS = [
+  "text-embedding-3-small",
+  "text-embedding-3-large",
+  "text-embedding-ada-002",
+  "voyage-3",
+];
+
+function IndexSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [settings, setSettings] = useState<IndexSettings>(DEFAULT_INDEX_SETTINGS);
+
+  useEffect(() => {
+    if (open) setSettings(loadIndexSettings());
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const save = () => {
+    try {
+      window.localStorage.setItem(INDEX_SETTINGS_KEY, JSON.stringify(settings));
+    } catch {
+      /* ignore quota/availability errors */
+    }
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Index settings">
+      <div onClick={onClose} className="absolute inset-0 bg-stone-900/30 dark:bg-black/50" />
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-md">
+        <div className="overflow-hidden rounded-2xl bg-white dark:bg-stone-950 border border-stone-200/80 dark:border-white/[0.08] shadow-2xl">
+          <div className="flex items-start gap-3 px-5 py-4 border-b border-stone-100 dark:border-white/[0.06]">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-[15px] font-semibold text-stone-900 dark:text-white">Index settings</h2>
+              <p className="mt-0.5 text-[12px] text-stone-400 dark:text-stone-500">
+                Client-side preferences stored in your browser.
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className="w-8 h-8 shrink-0 inline-flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-white/[0.06] transition"
+            >
+              <X size={17} />
+            </button>
+          </div>
+
+          <div className="p-5 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-stone-400 dark:text-stone-500">
+                  Chunk size
+                </span>
+                <input
+                  type="number"
+                  min={64}
+                  value={settings.chunkSize}
+                  onChange={(e) => setSettings((s) => ({ ...s, chunkSize: Number(e.target.value) }))}
+                  className="w-full rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-3 py-2 text-sm text-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-stone-400 dark:text-stone-500">
+                  Chunk overlap
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  value={settings.chunkOverlap}
+                  onChange={(e) => setSettings((s) => ({ ...s, chunkOverlap: Number(e.target.value) }))}
+                  className="w-full rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-3 py-2 text-sm text-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                />
+              </label>
+            </div>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-stone-400 dark:text-stone-500">
+                Embedding model
+              </span>
+              <select
+                value={settings.embeddingModel}
+                onChange={(e) => setSettings((s) => ({ ...s, embeddingModel: e.target.value }))}
+                className="w-full rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-3 py-2 text-sm text-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+              >
+                {EMBEDDING_MODELS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex items-center justify-between gap-3 rounded-xl bg-stone-50 dark:bg-white/[0.03] px-3.5 py-3 cursor-pointer">
+              <span className="min-w-0">
+                <span className="block text-[13.5px] font-medium text-stone-800 dark:text-stone-100">
+                  Auto-reindex on upload
+                </span>
+                <span className="block text-[12px] text-stone-400 dark:text-stone-500">
+                  Re-embed sources automatically after each upload.
+                </span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={settings.autoReindex}
+                onClick={() => setSettings((s) => ({ ...s, autoReindex: !s.autoReindex }))}
+                className={cn(
+                  "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition",
+                  settings.autoReindex ? "bg-indigo-600" : "bg-stone-300 dark:bg-white/15",
+                )}
+              >
+                <span
+                  className={cn(
+                    "inline-block h-4 w-4 rounded-full bg-white transition-transform",
+                    settings.autoReindex ? "translate-x-6" : "translate-x-1",
+                  )}
+                />
+              </button>
+            </label>
+
+            <p className="text-[11.5px] text-stone-400 dark:text-stone-500 leading-relaxed">
+              These are client-side preferences saved in your browser and are not yet sent to the indexing backend.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-stone-100 dark:border-white/[0.06]">
+            <Button variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={save}>
+              Save settings
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface Asset {
   id: string;
@@ -135,6 +310,7 @@ export default function KnowledgePage() {
 
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const onFiles = async (files: File[]) => {
     setUploadError(null);
@@ -175,7 +351,7 @@ export default function KnowledgePage() {
         title="Knowledge base"
         description="Source documents the AI draws on when generating assessment items. Indexed material is chunked and embedded for retrieval."
       >
-        <Button variant="secondary" Icon={Settings}>Index settings</Button>
+        <Button variant="secondary" Icon={Settings} onClick={() => setSettingsOpen(true)}>Index settings</Button>
       </PageHeader>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -358,6 +534,8 @@ export default function KnowledgePage() {
             : []
         }
       />
+
+      <IndexSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

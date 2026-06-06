@@ -7,10 +7,10 @@ import { PageHeader, EmptyState, Segmented } from "@/components/ui/index";
 import { StatusBadge, Tag } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { generationApi } from "@/lib/api";
+import { generationApi, workflowApi, repositoryApi } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
 import type { GeneratedContent } from "@/types";
-import { Download, Pencil, RefreshCw, X, Check, AlertCircle, BookOpen, Target, ClipboardCheck } from "lucide-react";
+import { Download, Pencil, X, Check, AlertCircle, BookOpen, Target, ClipboardCheck } from "lucide-react";
 
 interface ReviewItem {
   id: string;
@@ -87,6 +87,8 @@ function ReviewPageInner() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [filter, setFilter] = useState("all");
   const [toast, setToast] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
 
   useEffect(() => {
     setItems(fetched);
@@ -104,31 +106,99 @@ function ReviewPageInner() {
     setTimeout(() => setToast(null), 2200);
   };
 
+  const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+  const isAlreadyExists = (e: unknown) => {
+    const m = errMsg(e).toLowerCase();
+    const status = (e as { status?: number })?.status;
+    return status === 409 || m.includes("already exist") || m.includes("already in") || m.includes("duplicate");
+  };
+
   const approve = async () => {
     if (!active) return;
-    setStatus(active.id, "approved");
-    notify("Item approved");
-    const idx = visible.findIndex((i) => i.id === active.id);
-    const next = visible[idx + 1] || visible[idx - 1];
-    if (next) setActiveId(next.id);
+    const id = active.id;
     try {
-      await generationApi.updateContent(active.id, { status: "approved" });
-    } catch {
-      notify("Failed to save — reloading");
+      // Persist the workflow state on the server.
+      await workflowApi.transition(id, "approved");
+      // Push the item into the repository; tolerate "already exists".
+      try {
+        await repositoryApi.create({ content_id: id });
+      } catch (e) {
+        if (!isAlreadyExists(e)) throw e;
+      }
+      setStatus(id, "approved");
+      notify("Item approved & added to repository");
+      const idx = visible.findIndex((i) => i.id === id);
+      const next = visible[idx + 1] || visible[idx - 1];
+      if (next) setActiveId(next.id);
+    } catch (e) {
+      notify(`Failed to approve: ${errMsg(e)}`);
       reload();
     }
   };
 
   const reject = async () => {
     if (!active) return;
-    setStatus(active.id, "draft");
-    notify("Sent back to draft");
+    const id = active.id;
     try {
-      await generationApi.updateContent(active.id, { status: "draft" });
-    } catch {
-      notify("Failed to save — reloading");
+      await workflowApi.transition(id, "draft", "Sent back for revision");
+      setStatus(id, "draft");
+      notify("Sent back to draft");
+    } catch (e) {
+      notify(`Failed to send back: ${errMsg(e)}`);
       reload();
     }
+  };
+
+  const startEdit = () => {
+    if (!active) return;
+    setEditingId(active.id);
+    setEditDraft(active.stem);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditDraft("");
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    const id = editingId;
+    const body = editDraft;
+    try {
+      await generationApi.updateContent(id, { body });
+      setItems((arr) => arr.map((i) => (i.id === id ? { ...i, stem: body } : i)));
+      setEditingId(null);
+      setEditDraft("");
+      notify("Item saved");
+    } catch (e) {
+      notify(`Failed to save: ${errMsg(e)}`);
+    }
+  };
+
+  const exportQueue = () => {
+    const payload = visible.map((i) => ({
+      id: i.id,
+      type: i.type,
+      status: i.status,
+      bloom: i.bloom,
+      difficulty: i.difficulty,
+      framework: i.framework,
+      outcome: i.outcome,
+      stem: i.stem,
+      options: i.options,
+      rationale: i.rationale,
+      stimulus: i.stimulus,
+    }));
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `review-queue-${jobId ?? "items"}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    notify(`Exported ${payload.length} item${payload.length === 1 ? "" : "s"}`);
   };
 
   const counts = ["draft", "generated", "validated", "approved"].reduce(
@@ -142,9 +212,7 @@ function ReviewPageInner() {
         <PageHeader
           title="Review"
           description="Validate, edit and approve generated items before they enter the repository."
-        >
-          <Button variant="secondary" Icon={Download}>Export queue</Button>
-        </PageHeader>
+        />
         <div className={CARD}>
           <EmptyState
             Icon={ClipboardCheck}
@@ -171,7 +239,7 @@ function ReviewPageInner() {
         title="Review"
         description="Validate, edit and approve generated items before they enter the repository."
       >
-        <Button variant="secondary" Icon={Download}>Export queue</Button>
+        <Button variant="secondary" Icon={Download} onClick={exportQueue}>Export queue</Button>
       </PageHeader>
 
       <div className={cn(CARD, "overflow-hidden")}>
@@ -253,7 +321,22 @@ function ReviewPageInner() {
 
               <div className="space-y-1.5 mb-6">
                 <label className="text-[12px] font-medium uppercase tracking-wide text-stone-400 dark:text-stone-500">Stem</label>
-                <p className="text-[15px] leading-relaxed text-stone-900 dark:text-white">{active.stem}</p>
+                {editingId === active.id ? (
+                  <div className="space-y-2">
+                    <textarea
+                      value={editDraft}
+                      onChange={(e) => setEditDraft(e.target.value)}
+                      rows={4}
+                      className="w-full rounded-xl border border-stone-200 dark:border-white/[0.08] bg-white dark:bg-white/[0.03] px-3.5 py-2.5 text-[15px] leading-relaxed text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400/60"
+                    />
+                    <div className="flex items-center gap-2">
+                      <Button Icon={Check} size="sm" onClick={saveEdit}>Save</Button>
+                      <Button variant="secondary" Icon={X} size="sm" onClick={cancelEdit}>Cancel</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[15px] leading-relaxed text-stone-900 dark:text-white">{active.stem}</p>
+                )}
               </div>
 
               {active.options.length > 0 && (
@@ -288,8 +371,15 @@ function ReviewPageInner() {
             </div>
 
             <div className="border-t border-stone-200/80 dark:border-white/[0.06] p-4 flex items-center gap-2 bg-stone-50/50 dark:bg-white/[0.02]">
-              <Button variant="ghost" Icon={Pencil} size="md">Edit</Button>
-              <Button variant="ghost" Icon={RefreshCw} size="md" className="hidden sm:inline-flex">Regenerate</Button>
+              <Button
+                variant="ghost"
+                Icon={Pencil}
+                size="md"
+                onClick={startEdit}
+                disabled={editingId === active.id}
+              >
+                Edit
+              </Button>
               <div className="flex-1" />
               <Button variant="secondary" Icon={X} onClick={reject}>Reject</Button>
               <Button Icon={Check} onClick={approve}>Approve</Button>

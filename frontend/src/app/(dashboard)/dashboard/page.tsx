@@ -139,13 +139,39 @@ export default function DashboardPage() {
     { icon: Package, accent: "from-emerald-500 to-emerald-600", title: "Assemble package", desc: "Build an exam from the bank", href: "/assembly" },
   ];
 
+  const reportLoading = statsLoading || activityLoading || analyticsLoading;
+
+  function exportReport() {
+    if (reportLoading) return;
+    const report = {
+      generated_at: new Date().toISOString(),
+      stats: stats ?? null,
+      analytics: {
+        funnel,
+        by_status: byStatus,
+        by_type: byType,
+        by_difficulty: byDifficulty,
+      },
+      recent_activity: activityItems,
+    };
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "dashboard-report.json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div>
       <PageHeader
         title="Good morning"
         description="Here's what's happening across your assessment workspace today."
       >
-        <Button variant="secondary" Icon={FileText} size="md">Export report</Button>
+        <Button variant="secondary" Icon={FileText} size="md" onClick={exportReport} disabled={reportLoading}>Export report</Button>
         <Button Icon={Sparkles} onClick={() => router.push("/generate")}>New generation</Button>
       </PageHeader>
 

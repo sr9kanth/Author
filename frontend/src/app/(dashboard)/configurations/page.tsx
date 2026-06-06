@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CARD } from "@/components/ui/card";
 import { PageHeader, EmptyState } from "@/components/ui/index";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,58 @@ import { cn } from "@/lib/utils";
 import { configurationsApi } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
 import type { AssessmentConfiguration } from "@/types";
-import { Plus, Settings2, X, MoreHorizontal } from "lucide-react";
+import { Plus, Settings2, X, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+
+interface RowMenuProps {
+  onEdit: () => void;
+  onDelete: () => void;
+}
+
+function RowMenu({ onEdit, onDelete }: RowMenuProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+        className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-white/[0.06] transition"
+      >
+        <MoreHorizontal size={17} />
+      </button>
+      {open && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute right-0 mt-1 z-20 w-40 rounded-xl border border-stone-200/80 dark:border-white/[0.08] bg-white dark:bg-stone-900 shadow-lg py-1"
+        >
+          <button
+            onClick={(e) => { e.stopPropagation(); setOpen(false); onEdit(); }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-left text-[13px] text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-white/[0.06] transition"
+          >
+            <Pencil size={14} />
+            Edit
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setOpen(false); onDelete(); }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-left text-[13px] text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
+          >
+            <Trash2 size={14} />
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function fmtDate(iso: string) {
   const d = new Date(iso);
@@ -38,6 +89,7 @@ export default function ConfigurationsPage() {
   const configs: AssessmentConfiguration[] = data?.items ?? [];
 
   const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<CreateForm>(DEFAULTS);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -45,7 +97,22 @@ export default function ConfigurationsPage() {
   const nameRef = useRef<HTMLInputElement>(null);
 
   const openModal = () => {
+    setEditingId(null);
     setForm(DEFAULTS);
+    setSaveError(null);
+    setShowModal(true);
+    setTimeout(() => nameRef.current?.focus(), 50);
+  };
+
+  const openEditModal = (c: AssessmentConfiguration) => {
+    setEditingId(c.id);
+    setForm({
+      name: c.name,
+      question_count: c.question_count,
+      duration_minutes: c.duration_minutes,
+      language: c.language,
+      reading_level: c.reading_level,
+    });
     setSaveError(null);
     setShowModal(true);
     setTimeout(() => nameRef.current?.focus(), 50);
@@ -56,23 +123,42 @@ export default function ConfigurationsPage() {
   const set = (field: keyof CreateForm, value: string | number) =>
     setForm((f) => ({ ...f, [field]: value }));
 
+  const handleDelete = async (c: AssessmentConfiguration) => {
+    if (!window.confirm(`Delete configuration "${c.name}"? This cannot be undone.`)) return;
+    try {
+      await configurationsApi.delete(c.id);
+      reload();
+    } catch (err: unknown) {
+      window.alert(err instanceof Error ? err.message : "Failed to delete configuration");
+    }
+  };
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) return;
     setSaving(true);
     setSaveError(null);
+    const payload = {
+      name: form.name.trim(),
+      question_count: form.question_count,
+      duration_minutes: form.duration_minutes,
+      language: form.language,
+      reading_level: form.reading_level,
+    };
     try {
-      await configurationsApi.create({
-        name: form.name.trim(),
-        question_count: form.question_count,
-        duration_minutes: form.duration_minutes,
-        language: form.language,
-        reading_level: form.reading_level,
-      });
+      if (editingId) {
+        await configurationsApi.update(editingId, payload);
+      } else {
+        await configurationsApi.create(payload);
+      }
       reload();
       closeModal();
     } catch (err: unknown) {
-      setSaveError(err instanceof Error ? err.message : "Failed to create configuration");
+      setSaveError(
+        err instanceof Error
+          ? err.message
+          : `Failed to ${editingId ? "update" : "create"} configuration`,
+      );
     } finally {
       setSaving(false);
     }
@@ -134,9 +220,7 @@ export default function ConfigurationsPage() {
                     <td className="px-4 py-3.5 text-stone-500 dark:text-stone-400">{c.reading_level}</td>
                     <td className="px-4 py-3.5 text-stone-500 dark:text-stone-400 whitespace-nowrap">{fmtDate(c.created_at)}</td>
                     <td className="px-4 py-3.5 text-right">
-                      <button className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-white/[0.06] transition">
-                        <MoreHorizontal size={17} />
-                      </button>
+                      <RowMenu onEdit={() => openEditModal(c)} onDelete={() => handleDelete(c)} />
                     </td>
                   </tr>
                 ))}
@@ -158,7 +242,7 @@ export default function ConfigurationsPage() {
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeModal} />
           <div className="relative z-10 w-full max-w-md rounded-2xl bg-white dark:bg-stone-900 shadow-2xl border border-stone-200/60 dark:border-white/[0.08] p-6">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-semibold text-stone-900 dark:text-white">New configuration</h2>
+              <h2 className="text-base font-semibold text-stone-900 dark:text-white">{editingId ? "Edit configuration" : "New configuration"}</h2>
               <button
                 onClick={closeModal}
                 className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-white/[0.06] transition"
@@ -241,7 +325,7 @@ export default function ConfigurationsPage() {
               <div className="flex justify-end gap-2 pt-2">
                 <Button type="button" variant="secondary" onClick={closeModal}>Cancel</Button>
                 <Button type="submit" disabled={saving || !form.name.trim()}>
-                  {saving ? "Creating…" : "Create"}
+                  {saving ? "Saving…" : editingId ? "Save changes" : "Create"}
                 </Button>
               </div>
             </form>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CARD } from "@/components/ui/card";
 import { PageHeader, EmptyState } from "@/components/ui/index";
 import { Tag } from "@/components/ui/badge";
@@ -44,8 +44,36 @@ export default function AssemblyPage() {
   const [pkgName, setPkgName] = useState("Untitled package");
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const inPkg = (id: string) => pkg.some((p) => p.id === id);
+
+  const exportPackage = (name: string, items: Item[]) => {
+    const safeName = (name || "Untitled package").trim() || "Untitled package";
+    const payload = {
+      name: safeName,
+      exported_at: new Date().toISOString(),
+      item_count: items.length,
+      points: items.length * 4,
+      items: items.map((it, idx) => ({
+        order: idx + 1,
+        id: it.id,
+        stem: it.stem,
+        type: it.type,
+        bloom: it.bloom,
+        difficulty: it.difficulty,
+      })),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${safeName.replace(/[^a-z0-9-_]+/gi, "-").toLowerCase()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const addItem = (id: string) => {
     const item = REPOSITORY.find((p) => p.id === id);
@@ -114,13 +142,22 @@ export default function AssemblyPage() {
 
   const points = pkg.length * 4;
 
+  useEffect(() => {
+    if (!previewOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPreviewOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [previewOpen]);
+
   return (
     <div>
       <PageHeader
         title="Assembly"
         description="Drag approved items from the bank into a package to build an exam or assessment form."
       >
-        <Button variant="secondary" Icon={Eye}>Preview</Button>
+        <Button variant="secondary" Icon={Eye} onClick={() => setPreviewOpen(true)} disabled={pkg.length === 0}>Preview</Button>
         <Button Icon={Package} onClick={publish} disabled={publishing || pkg.length === 0}>
           {publishing ? "Publishing…" : "Publish package"}
         </Button>
@@ -266,7 +303,7 @@ export default function AssemblyPage() {
               <div className="p-3.5 border-t border-stone-100 dark:border-white/[0.05] flex items-center gap-2">
                 <button onClick={() => setPkg([])} className="text-[12.5px] text-stone-400 hover:text-rose-500 transition">Clear all</button>
                 <div className="flex-1" />
-                <Button variant="secondary" size="sm" Icon={Download}>Export</Button>
+                <Button variant="secondary" size="sm" Icon={Download} onClick={() => exportPackage(pkgName, pkg)}>Export</Button>
                 <Button size="sm" Icon={Check} onClick={publish} disabled={publishing}>
                   {publishing ? "…" : "Finalise"}
                 </Button>
@@ -275,6 +312,59 @@ export default function AssemblyPage() {
           </div>
         </div>
       </div>
+
+      {previewOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm print:static print:p-0 print:bg-transparent print:backdrop-blur-none"
+          onClick={() => setPreviewOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={cn(CARD, "w-full max-w-2xl flex flex-col max-h-[88vh] print:max-h-none print:max-w-none print:border-0 print:shadow-none")}
+          >
+            <div className="flex items-start gap-3 px-6 py-4 border-b border-stone-100 dark:border-white/[0.06] print:hidden">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[15px] font-semibold text-stone-900 dark:text-white leading-snug">Package preview</h2>
+                <p className="mt-0.5 text-[12.5px] text-stone-400 dark:text-stone-500">{pkg.length} items · {points} points</p>
+              </div>
+              <Button variant="secondary" size="sm" Icon={Download} onClick={() => exportPackage(pkgName, pkg)}>Export</Button>
+              <Button size="sm" onClick={() => window.print()}>Print</Button>
+              <button
+                onClick={() => setPreviewOpen(false)}
+                aria-label="Close preview"
+                className="w-8 h-8 shrink-0 inline-flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-white/[0.06] transition"
+              >
+                <X size={17} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-5 print:overflow-visible">
+              <h1 className="text-xl font-bold text-stone-900 dark:text-white print:text-black">{pkgName || "Untitled package"}</h1>
+              <p className="mt-1 text-[13px] text-stone-500 dark:text-stone-400 print:text-black">
+                Assessment package · {pkg.length} items · {points} points · est. {Math.max(15, pkg.length * 3)} min
+              </p>
+
+              <ol className="mt-6 space-y-4">
+                {pkg.map((r, idx) => (
+                  <li key={r.id} className="flex gap-3 break-inside-avoid">
+                    <span className="w-6 h-6 rounded-md bg-indigo-50 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 text-[12px] font-bold flex items-center justify-center shrink-0 mt-0.5 tabular-nums print:bg-transparent print:text-black print:border print:border-stone-400">{idx + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[14px] text-stone-900 dark:text-stone-100 leading-relaxed print:text-black">{r.stem}</p>
+                      <div className="mt-1.5 flex items-center gap-2 text-[11.5px] text-stone-500 dark:text-stone-400 print:text-black">
+                        <span>{r.type}</span>
+                        <span className="text-stone-300 dark:text-stone-600">·</span>
+                        <span className="text-violet-600 dark:text-violet-400 font-medium print:text-black">{r.bloom}</span>
+                        <span className="text-stone-300 dark:text-stone-600">·</span>
+                        <span className={cn("font-medium print:text-black", diffTone(r.difficulty))}>{r.difficulty}</span>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

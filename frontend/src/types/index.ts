@@ -199,6 +199,26 @@ export interface WorkflowStatus {
   updated_at: string;
 }
 
+export interface WorkflowEvent {
+  id: string;
+  workflow_id: string;
+  from_state: WorkflowState;
+  to_state: WorkflowState;
+  triggered_by: string;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface ReviewComment {
+  id: string;
+  workflow_id: string;
+  author_id: string;
+  body: string;
+  resolved: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PaginatedList<T> {
   items: T[];
   total: number;

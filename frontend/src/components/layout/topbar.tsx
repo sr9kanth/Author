@@ -2,9 +2,10 @@
 
 import { usePathname } from "next/navigation";
 import { Search, Sun, Moon, ChevronRight, HelpCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { resetTour } from "@/components/layout/onboarding-tour";
 import { NotificationsMenu } from "@/components/layout/notifications-menu";
+import { CommandPalette } from "@/components/command-palette";
 
 const PAGE_LABELS: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -21,6 +22,19 @@ export function Topbar() {
   const pathname = usePathname();
   const label = PAGE_LABELS[pathname] ?? "";
   const [dark, setDark] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Global Cmd/Ctrl+K to open the command palette.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   function toggleDark() {
     setDark((d) => {
@@ -40,18 +54,21 @@ export function Topbar() {
 
       <div className="flex-1" />
 
-      <div className="relative hidden md:block w-72">
+      <button
+        type="button"
+        onClick={() => setPaletteOpen(true)}
+        className="relative hidden md:flex items-center w-72 rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-white/[0.04] pl-9 pr-12 py-2 text-sm text-stone-400 dark:text-stone-500 hover:border-stone-300 dark:hover:border-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 transition"
+      >
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-stone-500 pointer-events-none">
           <Search size={15} />
         </span>
-        <input
-          placeholder="Search items, frameworks…"
-          className="w-full rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-white/[0.04] pl-9 pr-12 py-2 text-sm text-stone-700 dark:text-stone-200 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition"
-        />
+        <span className="truncate">Search · jump to…</span>
         <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-medium text-stone-400 dark:text-stone-500 border border-stone-200 dark:border-white/10 rounded px-1.5 py-0.5">
           ⌘K
         </kbd>
-      </div>
+      </button>
+
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
 
       <button
         onClick={() => { resetTour(); window.location.reload(); }}
