@@ -24,7 +24,9 @@ def event_loop():
     loop.close()
 
 
-@pytest_asyncio.fixture(scope="session", autouse=True)
+# Not autouse: DB-free unit tests (e.g. test_security) must run without a
+# database. Fixtures that need the DB depend on this explicitly.
+@pytest_asyncio.fixture(scope="session")
 async def setup_database():
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -34,7 +36,7 @@ async def setup_database():
 
 
 @pytest_asyncio.fixture
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
+async def db_session(setup_database) -> AsyncGenerator[AsyncSession, None]:
     async with TestSessionLocal() as session:
         yield session
         await session.rollback()
