@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from app.core.config import settings
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.generation.models import ContentStatus, GeneratedContent, GenerationJob, JobStatus
@@ -74,6 +75,7 @@ class GenerationService:
         total = count_result.scalar_one()
         result = await self.db.execute(
             select(GeneratedContent)
+            .options(selectinload(GeneratedContent.stimulus))
             .where(GeneratedContent.job_id == uuid.UUID(job_id))
             .offset(skip)
             .limit(limit)
