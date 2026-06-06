@@ -1,4 +1,4 @@
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -56,6 +56,20 @@ class Settings(BaseSettings):
             except Exception:
                 pass
         return [o.strip() for o in v.split(",") if o.strip()]
+
+    @model_validator(mode="after")
+    def reject_default_secret_in_prod(self) -> "Settings":
+        # In production the JWT signing key MUST be overridden. Fail fast
+        # rather than silently signing tokens with a publicly-known default.
+        if (
+            self.ENVIRONMENT.lower() == "production"
+            and self.SECRET_KEY == "changeme-use-openssl-rand-hex-32"
+        ):
+            raise ValueError(
+                "SECRET_KEY must be set to a strong random value in production "
+                "(e.g. `openssl rand -hex 32`); the built-in default is not permitted."
+            )
+        return self
 
 
 settings = Settings()

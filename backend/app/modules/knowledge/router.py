@@ -26,11 +26,18 @@ async def upload_file(asset_id: str, file: UploadFile, current_user_id: CurrentU
         try:
             from app.workers.tasks import process_knowledge_asset
             process_knowledge_asset.delay(str(asset_id))
-        except Exception:
-            pass  # worker not available; extraction will be skipped
+        except Exception as exc:
+            # Worker/broker unavailable — log it; the asset is uploaded and can
+            # be re-indexed later, but we must not swallow this silently.
+            import structlog
+            structlog.get_logger(__name__).error(
+                "knowledge_worker_dispatch_failed", asset_id=str(asset_id), error=str(exc)
+            )
         return asset
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
 
 
 @router.get("", response_model=KnowledgeAssetList)

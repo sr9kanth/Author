@@ -73,7 +73,12 @@ services:
       AWS_ACCESS_KEY_ID: minioadmin
       AWS_SECRET_ACCESS_KEY: minioadmin
       AWS_BUCKET_NAME: aip-assets
-      ENVIRONMENT: production
+      # Local compose is a development environment. In a real production
+      # deployment set ENVIRONMENT=production AND a strong SECRET_KEY
+      # (e.g. `openssl rand -hex 32`) — the app refuses to boot in
+      # production with the built-in default key.
+      ENVIRONMENT: development
+      SECRET_KEY: local-dev-only-not-secret
       CORS_ORIGINS: "http://localhost:3000"
     depends_on:
       postgres:

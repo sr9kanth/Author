@@ -23,6 +23,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# The frontend calls the backend through a same-origin Next.js proxy
+# (see frontend/next.config.mjs), so browsers never make cross-origin
+# requests in normal operation. CORS is therefore restricted to an explicit
+# allow-list (configurable via CORS_ORIGINS) rather than a wildcard, which is
+# kept only for direct API access during local development / tooling.
 _cors_origins = settings.CORS_ORIGINS + [
     "https://writer-two-iota.vercel.app",
     "http://localhost:3000",
@@ -33,9 +38,7 @@ _cors_origins = settings.CORS_ORIGINS + [
 
 app.add_middleware(
     CORSMiddleware,
-    # Allow all origins — we use Bearer tokens, not cookies, so
-    # allow_credentials stays False which permits the "*" wildcard.
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

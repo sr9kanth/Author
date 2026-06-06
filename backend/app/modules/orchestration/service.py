@@ -51,7 +51,20 @@ class AIOrchestrationService:
         provider: str | None = None,
         **kwargs: Any,
     ) -> str:
+        """Return just the completion text (convenience wrapper)."""
+        result = await self.complete_detailed(messages, model, provider, **kwargs)
+        return result["content"]
+
+    async def complete_detailed(
+        self,
+        messages: list[dict[str, str]],
+        model: str | None = None,
+        provider: str | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Run a completion and return content plus usage/cost/latency metadata."""
         model_string = self._build_model_string(model, provider)
+        effective_provider = provider or settings.LITELLM_DEFAULT_PROVIDER
         start_ms = int(time.time() * 1000)
         kwargs.setdefault("timeout", settings.AI_REQUEST_TIMEOUT)
         try:
@@ -63,14 +76,33 @@ class AIOrchestrationService:
             elapsed_ms = int(time.time() * 1000) - start_ms
             content = response.choices[0].message.content or ""
             usage = response.usage or {}
+            prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+            completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+
+            # Real cost from LiteLLM's pricing tables when available.
+            cost_usd = 0.0
+            try:
+                cost_usd = float(litellm.completion_cost(completion_response=response) or 0.0)
+            except Exception:
+                cost_usd = 0.0
+
             logger.info(
                 "ai_completion",
                 model=model_string,
-                prompt_tokens=getattr(usage, "prompt_tokens", 0),
-                completion_tokens=getattr(usage, "completion_tokens", 0),
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                cost_usd=cost_usd,
                 latency_ms=elapsed_ms,
             )
-            return content
+            return {
+                "content": content,
+                "model": model_string,
+                "provider": effective_provider,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "cost_usd": cost_usd,
+                "latency_ms": elapsed_ms,
+            }
         except Exception as exc:
             logger.error("ai_completion_failed", model=model_string, error=str(exc))
             raise
@@ -105,18 +137,3 @@ class AIOrchestrationService:
             {"id": "llama3.2", "provider": "ollama", "context_window": 128000},
         ]
         return models
-
-    async def estimate_cost(self, messages: list[dict], model: str) -> float:
-        try:
-            token_count = litellm.token_counter(model=model, messages=messages)
-            cost = litellm.completion_cost(
-                completion_response=None,
-                model=model,
-                prompt="",
-                completion="",
-                prompt_tokens=token_count,
-                completion_tokens=int(token_count * 0.5),
-            )
-            return float(cost or 0.0)
-        except Exception:
-            return 0.0
