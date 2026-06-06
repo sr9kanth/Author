@@ -6,7 +6,7 @@ import { clearTokens } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Layers, Database, Sparkles, ClipboardCheck,
-  Library, Package, LogOut, CheckSquare,
+  Library, Package, LogOut, CheckSquare, SlidersHorizontal,
 } from "lucide-react";
 
 const NAV = [
@@ -17,9 +17,10 @@ const NAV = [
   { key: "review", label: "Review", href: "/review", Icon: ClipboardCheck, section: "Quality", count: 5 },
   { key: "repository", label: "Repository", href: "/repository", Icon: Library, section: "Quality" },
   { key: "assembly", label: "Assembly", href: "/assembly", Icon: Package, section: "Delivery" },
+  { key: "metadata", label: "Metadata", href: "/metadata", Icon: SlidersHorizontal, section: "Settings" },
 ];
 
-const SECTIONS = ["Overview", "Content", "Quality", "Delivery"];
+const SECTIONS = ["Overview", "Content", "Quality", "Delivery", "Settings"];
 
 function LogoMark() {
   return (

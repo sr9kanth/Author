@@ -4,11 +4,14 @@ import type {
   AssessmentConfiguration,
   AssessmentItem,
   AssessmentPackage,
+  DashboardAnalytics,
   DashboardStats,
   Framework,
   GeneratedContent,
   GenerationJob,
+  Guide,
   KnowledgeAsset,
+  MetadataDimension,
   PaginatedList,
   User,
   ValidationResult,
@@ -184,8 +187,37 @@ export const generationApi = {
 // ---- Dashboard ----
 export const dashboardApi = {
   stats: () => request<DashboardStats>("/dashboard/stats"),
+  analytics: () => request<DashboardAnalytics>("/dashboard/analytics"),
   activity: (limit = 10) =>
-    request<PaginatedList<ActivityItem>>(`/dashboard/activity?limit=${limit}`),
+    request<{ items: ActivityItem[] }>(`/dashboard/activity?limit=${limit}`),
+};
+
+// ---- Guides ----
+export const guidesApi = {
+  list: (frameworkId?: string) =>
+    request<{ items: Guide[]; total: number }>(
+      frameworkId ? `/guides?framework_id=${frameworkId}` : "/guides"
+    ),
+  get: (id: string) => request<Guide>(`/guides/${id}`),
+  create: (data: { title: string; body: string; framework_id?: string; is_active?: boolean }) =>
+    request<Guide>("/guides", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<{ title: string; body: string; is_active: boolean }>) =>
+    request<Guide>(`/guides/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: (id: string) => request<void>(`/guides/${id}`, { method: "DELETE" }),
+};
+
+// ---- Metadata ----
+export const metadataApi = {
+  list: (scope?: string) =>
+    request<{ items: MetadataDimension[]; total: number }>(
+      scope ? `/metadata?scope=${scope}` : "/metadata"
+    ),
+  get: (id: string) => request<MetadataDimension>(`/metadata/${id}`),
+  create: (data: Partial<MetadataDimension>) =>
+    request<MetadataDimension>("/metadata", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<MetadataDimension>) =>
+    request<MetadataDimension>(`/metadata/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: (id: string) => request<void>(`/metadata/${id}`, { method: "DELETE" }),
 };
 
 // ---- Repository ----

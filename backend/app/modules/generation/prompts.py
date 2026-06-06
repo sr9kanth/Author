@@ -4,6 +4,13 @@ QUESTION_GENERATION_SYSTEM = """You are an expert assessment author specialising
 examination questions. Your questions are accurate, unambiguous, fair, and aligned with the specified
 cognitive levels and learning outcomes."""
 
+
+def build_system_prompt(guide_text: str | None = None) -> str:
+    """Build the system prompt, appending an item authoring guide when provided."""
+    if guide_text and guide_text.strip():
+        return f"{QUESTION_GENERATION_SYSTEM}\n\n## Item Authoring Guide\n{guide_text.strip()}"
+    return QUESTION_GENERATION_SYSTEM
+
 QUESTION_GENERATION_USER_TEMPLATE = """Generate {question_count} {question_type} questions based on
 the following knowledge content.
 

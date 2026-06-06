@@ -47,6 +47,8 @@ from app.modules.repository.router import router as repository_router
 from app.modules.workflow.router import router as workflow_router
 from app.modules.assembly.router import router as assembly_router
 from app.modules.dashboard.router import router as dashboard_router
+from app.modules.guides.router import router as guides_router
+from app.modules.metadata.router import router as metadata_router
 
 API_PREFIX = "/api/v1"
 
@@ -61,6 +63,8 @@ app.include_router(repository_router, prefix=API_PREFIX)
 app.include_router(workflow_router, prefix=API_PREFIX)
 app.include_router(assembly_router, prefix=API_PREFIX)
 app.include_router(dashboard_router, prefix=API_PREFIX)
+app.include_router(guides_router, prefix=API_PREFIX)
+app.include_router(metadata_router, prefix=API_PREFIX)
 
 
 @app.get("/health", tags=["health"])

@@ -7,9 +7,10 @@ import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { INPUT_CLS } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { frameworksApi } from "@/lib/api";
+import { frameworksApi, guidesApi } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
-import { Plus, Filter, Folder, MoreHorizontal, ChevronUp, ChevronDown, ChevronsUpDown, Layers, X } from "lucide-react";
+import { Plus, Filter, Folder, MoreHorizontal, ChevronUp, ChevronDown, ChevronsUpDown, Layers, X, BookOpen, Trash2 } from "lucide-react";
+import type { Guide } from "@/types";
 
 interface FrameworkRow {
   id: string;
@@ -151,6 +152,160 @@ function NewFrameworkModal({ onClose, onCreated }: NewFrameworkModalProps) {
   );
 }
 
+interface GuidesModalProps {
+  frameworkId: string;
+  frameworkName: string;
+  onClose: () => void;
+}
+
+function GuidesModal({ frameworkId, frameworkName, onClose }: GuidesModalProps) {
+  const { data, loading, error, reload } = useAsync(() => guidesApi.list(frameworkId), [frameworkId]);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const guides: Guide[] = data?.items ?? [];
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim() || !body.trim()) return;
+    setSaving(true);
+    setFormError(null);
+    try {
+      await guidesApi.create({ framework_id: frameworkId, title: title.trim(), body: body.trim() });
+      setTitle("");
+      setBody("");
+      reload();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleActive = async (g: Guide) => {
+    try {
+      await guidesApi.update(g.id, { is_active: !g.is_active });
+      reload();
+    } catch {
+      // ignore
+    }
+  };
+
+  const remove = async (g: Guide) => {
+    try {
+      await guidesApi.delete(g.id);
+      reload();
+    } catch {
+      // ignore
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className={cn(CARD, "w-full max-w-2xl p-6 flex flex-col gap-5 max-h-[85vh] overflow-y-auto")}>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-stone-900 dark:text-white">Item creation guides</h2>
+            <p className="text-[13px] text-stone-500 dark:text-stone-400">House style for {frameworkName}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-white/[0.06] transition"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {loading ? (
+            <div className="py-6 text-center text-sm text-stone-400 dark:text-stone-500">Loading guides…</div>
+          ) : error ? (
+            <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>
+          ) : guides.length === 0 ? (
+            <p className="text-sm text-stone-500 dark:text-stone-400 py-2">No guides yet. Add one below.</p>
+          ) : (
+            guides.map((g) => (
+              <div
+                key={g.id}
+                className="flex items-start gap-3 rounded-xl border border-stone-200/80 dark:border-white/[0.07] p-3"
+              >
+                <BookOpen size={16} className="mt-0.5 text-indigo-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-stone-900 dark:text-white">{g.title}</div>
+                  <div className="text-[13px] text-stone-500 dark:text-stone-400 whitespace-pre-wrap line-clamp-3">{g.body}</div>
+                </div>
+                <button
+                  onClick={() => toggleActive(g)}
+                  className={cn(
+                    "text-[11px] font-medium px-2 py-1 rounded-md transition shrink-0",
+                    g.is_active
+                      ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300"
+                      : "bg-stone-100 text-stone-500 dark:bg-white/[0.06] dark:text-stone-400",
+                  )}
+                >
+                  {g.is_active ? "Active" : "Inactive"}
+                </button>
+                <button
+                  onClick={() => remove(g)}
+                  className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition shrink-0"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
+        <form onSubmit={handleAdd} className="flex flex-col gap-3 border-t border-stone-200/80 dark:border-white/[0.07] pt-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-[13px] font-medium text-stone-700 dark:text-stone-200">Guide title</label>
+            <input
+              className={INPUT_CLS}
+              placeholder="e.g. Tone & formatting rules"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              disabled={saving}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[13px] font-medium text-stone-700 dark:text-stone-200">Guide content</label>
+            <textarea
+              className={cn(INPUT_CLS, "resize-none min-h-[120px]")}
+              placeholder="Describe tone, formatting rules, do/don'ts, exemplars…"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              disabled={saving}
+            />
+          </div>
+          {formError && (
+            <p className="text-sm text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 rounded-lg px-3 py-2">
+              {formError}
+            </p>
+          )}
+          <div className="flex justify-end">
+            <Button type="submit" Icon={Plus} size="md" disabled={saving || !title.trim() || !body.trim()}>
+              {saving ? "Adding…" : "Add guide"}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function fmtDate(iso: string) {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "—";
@@ -162,6 +317,7 @@ export default function FrameworksPage() {
   const [domain, setDomain] = useState("All domains");
   const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: "updated", dir: "desc" });
   const [showNewModal, setShowNewModal] = useState(false);
+  const [guidesFor, setGuidesFor] = useState<{ id: string; name: string } | null>(null);
 
   const { data, loading, error, reload } = useAsync(() => frameworksApi.list(0, 100), []);
 
@@ -222,6 +378,13 @@ export default function FrameworksPage() {
         <NewFrameworkModal
           onClose={() => setShowNewModal(false)}
           onCreated={reload}
+        />
+      )}
+      {guidesFor && (
+        <GuidesModal
+          frameworkId={guidesFor.id}
+          frameworkName={guidesFor.name}
+          onClose={() => setGuidesFor(null)}
         />
       )}
       <PageHeader
@@ -295,6 +458,7 @@ export default function FrameworksPage() {
                 {rows.map((f) => (
                   <tr
                     key={f.id}
+                    onClick={() => setGuidesFor({ id: f.id, name: f.name })}
                     className="border-b border-stone-100 dark:border-white/[0.04] last:border-0 transition cursor-pointer hover:bg-stone-50/80 dark:hover:bg-white/[0.025]"
                   >
                     <td className="px-4 py-3.5">
@@ -312,9 +476,21 @@ export default function FrameworksPage() {
                     <td className="px-4 py-3.5 text-[13px] text-stone-500 dark:text-stone-400 hidden lg:table-cell">{f.owner}</td>
                     <td className="px-4 py-3.5 text-stone-500 dark:text-stone-400 whitespace-nowrap hidden lg:table-cell">{fmtDate(f.updated)}</td>
                     <td className="px-4 py-3.5 text-right">
-                      <button className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-white/[0.06] transition">
-                        <MoreHorizontal size={17} />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setGuidesFor({ id: f.id, name: f.name }); }}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium text-stone-600 dark:text-stone-300 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-stone-100 dark:hover:bg-white/[0.06] transition"
+                        >
+                          <BookOpen size={14} />
+                          Guides
+                        </button>
+                        <button
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-white/[0.06] transition"
+                        >
+                          <MoreHorizontal size={17} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

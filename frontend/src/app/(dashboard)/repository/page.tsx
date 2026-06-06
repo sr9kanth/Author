@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { repositoryApi } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
+import { DetailPanel, useDetailPanel } from "@/components/ui/detail-panel";
 import { Download, Package, Copy, Eye, Plus, Search, FileQuestion, LayoutDashboard, SlidersHorizontal } from "lucide-react";
 
 interface RepoRow {
@@ -19,6 +20,19 @@ interface RepoRow {
   difficulty: string;
   topic: string;
   usage: number;
+  tags: string[];
+  created: string;
+}
+
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[11px] font-medium uppercase tracking-wide text-stone-400 dark:text-stone-500">
+        {label}
+      </span>
+      <span className="text-[13.5px] text-stone-800 dark:text-stone-100 break-words">{value}</span>
+    </div>
+  );
 }
 
 const BLOOM_LEVELS = ["all", "Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"];
@@ -32,6 +46,7 @@ export default function RepositoryPage() {
   const [query, setQuery] = useState("");
   const [bloom, setBloom] = useState("all");
   const [view, setView] = useState<"grid" | "list">("grid");
+  const panel = useDetailPanel<RepoRow>();
 
   const { data, loading, error } = useAsync(() => repositoryApi.list(0, 100), []);
 
@@ -45,6 +60,8 @@ export default function RepositoryPage() {
         difficulty: r.difficulty ?? "—",
         topic: r.topic ?? (r.tags[0] ?? "—"),
         usage: r.usage_count,
+        tags: r.tags,
+        created: r.created_at,
       })),
     [data],
   );
@@ -112,7 +129,7 @@ export default function RepositoryPage() {
       ) : view === "grid" ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {rows.map((r) => (
-            <div key={r.id} className={cn(CARD, "group p-4 flex flex-col hover:shadow-md hover:shadow-stone-200/50 dark:hover:shadow-black/30 hover:-translate-y-0.5 transition-all duration-200")}>
+            <div key={r.id} onClick={() => panel.openWith(r)} className={cn(CARD, "group p-4 flex flex-col cursor-pointer hover:shadow-md hover:shadow-stone-200/50 dark:hover:shadow-black/30 hover:-translate-y-0.5 transition-all duration-200")}>
               <div className="flex items-center justify-between mb-3">
                 <Tag tone="indigo">{r.type}</Tag>
                 <span className="inline-flex items-center gap-1 text-[11.5px] text-stone-400 dark:text-stone-500">
@@ -129,8 +146,8 @@ export default function RepositoryPage() {
                 <span className="text-[11.5px] text-stone-400 dark:text-stone-500 truncate max-w-[45%]">{r.topic}</span>
               </div>
               <div className="mt-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition">
-                <Button variant="secondary" size="sm" Icon={Eye} className="flex-1">Preview</Button>
-                <Button size="sm" Icon={Plus} className="flex-1" onClick={() => router.push("/assembly")}>Add</Button>
+                <Button variant="secondary" size="sm" Icon={Eye} className="flex-1" onClick={(e) => { e.stopPropagation(); panel.openWith(r); }}>Preview</Button>
+                <Button size="sm" Icon={Plus} className="flex-1" onClick={(e) => { e.stopPropagation(); router.push("/assembly"); }}>Add</Button>
               </div>
             </div>
           ))}
@@ -138,7 +155,7 @@ export default function RepositoryPage() {
       ) : (
         <div className={cn(CARD, "divide-y divide-stone-100 dark:divide-white/[0.04]")}>
           {rows.map((r) => (
-            <div key={r.id} className="group flex items-center gap-4 px-4 py-3.5 hover:bg-stone-50/70 dark:hover:bg-white/[0.02] transition">
+            <div key={r.id} onClick={() => panel.openWith(r)} className="group flex items-center gap-4 px-4 py-3.5 cursor-pointer hover:bg-stone-50/70 dark:hover:bg-white/[0.02] transition">
               <span className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500 dark:text-indigo-300 flex items-center justify-center shrink-0">
                 <FileQuestion size={17} />
               </span>
@@ -146,7 +163,7 @@ export default function RepositoryPage() {
               <Tag tone="neutral">{r.bloom}</Tag>
               <span className={cn("text-[12px] font-medium hidden sm:inline", diffTone(r.difficulty))}>{r.difficulty}</span>
               <span className="text-[12px] text-stone-400 dark:text-stone-500 hidden md:inline w-28 truncate">{r.topic}</span>
-              <Button size="sm" variant="secondary" Icon={Plus} onClick={() => router.push("/assembly")}>Add</Button>
+              <Button size="sm" variant="secondary" Icon={Plus} onClick={(e) => { e.stopPropagation(); router.push("/assembly"); }}>Add</Button>
             </div>
           ))}
         </div>
@@ -157,6 +174,65 @@ export default function RepositoryPage() {
           {rows.length} approved items{bloom !== "all" ? ` · ${bloom}` : ""}
         </p>
       )}
+
+      <DetailPanel
+        open={panel.open}
+        onClose={panel.close}
+        title={panel.active?.stem ?? "Item"}
+        subtitle={panel.active ? `${panel.active.type} · ${panel.active.topic}` : undefined}
+        tabs={
+          panel.active
+            ? [
+                {
+                  id: "view",
+                  label: "View",
+                  content: (
+                    <div className="space-y-5">
+                      <Field label="Stem" value={panel.active.stem} />
+                      <div className="grid grid-cols-2 gap-5">
+                        <Field label="Type" value={<Tag tone="indigo">{panel.active.type}</Tag>} />
+                        <Field label="Bloom" value={<Tag tone="violet">{panel.active.bloom}</Tag>} />
+                        <Field
+                          label="Difficulty"
+                          value={<span className={cn("font-medium", diffTone(panel.active.difficulty))}>{panel.active.difficulty}</span>}
+                        />
+                        <Field label="Topic" value={panel.active.topic} />
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  id: "properties",
+                  label: "Properties",
+                  content: (
+                    <div className="space-y-5">
+                      <Field label="ID" value={<span className="font-mono text-[12px]">{panel.active.id}</span>} />
+                      <Field label="Usage count" value={`${panel.active.usage}×`} />
+                      <Field
+                        label="Tags"
+                        value={
+                          panel.active.tags.length ? (
+                            <span className="flex flex-wrap gap-1.5">
+                              {panel.active.tags.map((t) => (
+                                <Tag key={t} tone="neutral">{t}</Tag>
+                              ))}
+                            </span>
+                          ) : (
+                            "—"
+                          )
+                        }
+                      />
+                      <Field
+                        label="Created"
+                        value={panel.active.created ? new Date(panel.active.created).toLocaleString() : "—"}
+                      />
+                    </div>
+                  ),
+                },
+              ]
+            : []
+        }
+      />
     </div>
   );
 }

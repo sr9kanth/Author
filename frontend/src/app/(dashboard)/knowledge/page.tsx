@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { knowledgeApi } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
+import { DetailPanel, useDetailPanel } from "@/components/ui/detail-panel";
+import { Tag } from "@/components/ui/badge";
 import type { KnowledgeAsset } from "@/types";
 import { Settings, FileText, RefreshCw, Trash2, Sparkles, Database } from "lucide-react";
 
@@ -21,6 +23,25 @@ interface Asset {
   chunks: number;
   status: DisplayStatus;
   uploaded: string;
+  topics: string[];
+  keywords: string[];
+  storagePath: string | null;
+}
+
+function labelsFrom(rec: Record<string, unknown> | null): string[] {
+  if (!rec || typeof rec !== "object") return [];
+  return Object.keys(rec);
+}
+
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[11px] font-medium uppercase tracking-wide text-stone-400 dark:text-stone-500">
+        {label}
+      </span>
+      <span className="text-[13.5px] text-stone-800 dark:text-stone-100 break-words">{value}</span>
+    </div>
+  );
 }
 
 function fmtSize(bytes: number | null): string {
@@ -101,9 +122,14 @@ export default function KnowledgePage() {
         chunks: chunkCount(a),
         status: displayStatus(a.status),
         uploaded: a.created_at,
+        topics: labelsFrom(a.extracted_topics),
+        keywords: a.keywords ?? [],
+        storagePath: a.storage_path,
       })),
     [data],
   );
+
+  const panel = useDetailPanel<Asset>();
 
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -181,7 +207,8 @@ export default function KnowledgePage() {
               {assets.map((a) => (
                 <li
                   key={a.id}
-                  className="group flex items-center gap-3.5 px-5 py-3.5 border-b border-stone-100 dark:border-white/[0.04] last:border-0 hover:bg-stone-50/70 dark:hover:bg-white/[0.02] transition"
+                  onClick={() => panel.openWith(a)}
+                  className="group flex items-center gap-3.5 px-5 py-3.5 border-b border-stone-100 dark:border-white/[0.04] last:border-0 cursor-pointer hover:bg-stone-50/70 dark:hover:bg-white/[0.02] transition"
                 >
                   <span className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 relative", typeStyle(a.type))}>
                     <FileText size={18} />
@@ -201,12 +228,12 @@ export default function KnowledgePage() {
                   <StatusBadge status={a.status} size="sm" />
                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
                     {a.status === "failed" && (
-                      <button className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-stone-400 hover:text-indigo-500 hover:bg-stone-100 dark:hover:bg-white/[0.06] transition">
+                      <button onClick={(e) => e.stopPropagation()} className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-stone-400 hover:text-indigo-500 hover:bg-stone-100 dark:hover:bg-white/[0.06] transition">
                         <RefreshCw size={15} />
                       </button>
                     )}
                     <button
-                      onClick={() => remove(a.id)}
+                      onClick={(e) => { e.stopPropagation(); remove(a.id); }}
                       className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-stone-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
                     >
                       <Trash2 size={15} />
@@ -258,6 +285,74 @@ export default function KnowledgePage() {
           </div>
         </div>
       </div>
+
+      <DetailPanel
+        open={panel.open}
+        onClose={panel.close}
+        title={panel.active?.name ?? "Source"}
+        subtitle={panel.active ? `${panel.active.type} · ${panel.active.size}` : undefined}
+        tabs={
+          panel.active
+            ? [
+                {
+                  id: "view",
+                  label: "View",
+                  content: (
+                    <div className="space-y-5">
+                      <Field label="Title" value={panel.active.name} />
+                      <div className="grid grid-cols-2 gap-5">
+                        <Field label="Type" value={<Tag tone="indigo">{panel.active.type}</Tag>} />
+                        <Field label="Size" value={panel.active.size} />
+                      </div>
+                      <Field label="Status" value={<StatusBadge status={panel.active.status} size="sm" />} />
+                      {panel.active.topics.length > 0 && (
+                        <Field
+                          label="Extracted topics"
+                          value={
+                            <span className="flex flex-wrap gap-1.5">
+                              {panel.active.topics.map((t) => (
+                                <Tag key={t} tone="violet">{t}</Tag>
+                              ))}
+                            </span>
+                          }
+                        />
+                      )}
+                      {panel.active.keywords.length > 0 && (
+                        <Field
+                          label="Keywords"
+                          value={
+                            <span className="flex flex-wrap gap-1.5">
+                              {panel.active.keywords.map((k) => (
+                                <Tag key={k} tone="neutral">{k}</Tag>
+                              ))}
+                            </span>
+                          }
+                        />
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  id: "properties",
+                  label: "Properties",
+                  content: (
+                    <div className="space-y-5">
+                      <Field label="ID" value={<span className="font-mono text-[12px]">{panel.active.id}</span>} />
+                      <Field
+                        label="Created"
+                        value={panel.active.uploaded ? new Date(panel.active.uploaded).toLocaleString() : "—"}
+                      />
+                      <Field
+                        label="Storage path"
+                        value={<span className="font-mono text-[12px] break-all">{panel.active.storagePath ?? "—"}</span>}
+                      />
+                    </div>
+                  ),
+                },
+              ]
+            : []
+        }
+      />
     </div>
   );
 }

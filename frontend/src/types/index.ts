@@ -157,6 +157,7 @@ export type ContentStatus =
 export interface GeneratedContent {
   id: string;
   job_id: string;
+  stimulus_id: string | null;
   content_type: string;
   body: string;
   content_metadata: Record<string, unknown>;
@@ -169,6 +170,7 @@ export interface GeneratedContent {
   validation_score: number | null;
   created_at: string;
   updated_at: string;
+  stimulus?: Stimulus | null;
 }
 
 export interface ValidationResult {
@@ -200,4 +202,65 @@ export interface WorkflowStatus {
 export interface PaginatedList<T> {
   items: T[];
   total: number;
+}
+
+export interface FunnelStage {
+  name: string;
+  count: number;
+}
+
+export interface DistributionSlice {
+  label: string;
+  count: number;
+}
+
+export interface DashboardAnalytics {
+  funnel: FunnelStage[];
+  by_status: DistributionSlice[];
+  by_type: DistributionSlice[];
+  by_difficulty: DistributionSlice[];
+}
+
+export interface Guide {
+  id: string;
+  title: string;
+  body: string;
+  framework_id: string | null;
+  is_active: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type MetadataDimensionValueType = "dictionary_single" | "dictionary_multi" | "text" | "number";
+
+export interface MetadataValue {
+  value: string;
+  display_title: string;
+}
+
+export interface MetadataDimension {
+  id: string;
+  name: string;
+  key: string;
+  value_type: MetadataDimensionValueType;
+  dimension_values: unknown[];
+  explanation: string | null;
+  scopes: string[];
+  source: "defined" | "library";
+  is_active: boolean;
+  sort_order: number;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Stimulus {
+  id: string;
+  title: string;
+  body: string;
+  stimulus_type: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
 }
