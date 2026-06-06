@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   ArrowRight, X, Layers, Database, Sparkles,
-  ClipboardCheck, Library, LayoutDashboard,
+  ClipboardCheck, Library, LayoutDashboard, BookOpen, SlidersHorizontal,
 } from "lucide-react";
 
 const TOUR_KEY = "aip_tour_done";
@@ -66,6 +66,22 @@ const STEPS: Step[] = [
     Icon: Library,
     accent: "from-emerald-500 to-emerald-600",
     tip: "Items can be reordered by dragging within the package.",
+  },
+  {
+    title: "6. Write item guides",
+    body: "Guides are writing instructions injected into every generation prompt for a given framework. Use them to enforce house style, formatting rules, or subject-specific conventions.",
+    href: "/frameworks",
+    Icon: BookOpen,
+    accent: "from-cyan-500 to-cyan-600",
+    tip: "Open a framework and go to the Guides tab to add a guide. The AI will follow your instructions on every generation run.",
+  },
+  {
+    title: "7. Configure metadata",
+    body: "Metadata dimensions define the structured tags attached to every item — Bloom’s level, difficulty, cognitive demand, and any custom fields your organisation needs.",
+    href: "/metadata",
+    Icon: SlidersHorizontal,
+    accent: "from-pink-500 to-rose-600",
+    tip: "Add dimensions under Settings → Metadata. Dictionary dimensions let you define a fixed set of values; text and number fields are free-form.",
   },
 ];
 
