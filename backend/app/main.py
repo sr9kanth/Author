@@ -23,14 +23,20 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_cors_origins = settings.CORS_ORIGINS + [
+    "https://writer-two-iota.vercel.app",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS + [
-        "https://writer-two-iota.vercel.app",
-        "http://localhost:3000",
-        "http://localhost:3001",
-    ],
-    allow_credentials=True,
+    # Allow all origins — we use Bearer tokens, not cookies, so
+    # allow_credentials stays False which permits the "*" wildcard.
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

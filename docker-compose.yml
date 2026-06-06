@@ -108,6 +108,11 @@ services:
     ports:
       - "3000:3000"
     environment:
+      # BACKEND_URL: server-side URL the Next.js container uses to reach the backend.
+      # Uses Docker container DNS — the browser never touches this URL directly.
+      BACKEND_URL: http://backend:8000
+      # NEXT_PUBLIC_API_URL: baked into the browser bundle at build time.
+      # Keep as localhost so direct browser→backend calls also work locally.
       NEXT_PUBLIC_API_URL: http://localhost:8000
     depends_on:
       - backend

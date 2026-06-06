@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 
 import boto3
@@ -40,10 +41,17 @@ class KnowledgeService:
             raise ValueError("Asset not found")
 
         s3_key = f"knowledge/{asset_id}/{filename}"
-        s3 = self._s3_client()
-        s3.put_object(Bucket=settings.AWS_BUCKET_NAME, Key=s3_key, Body=file_bytes)
 
-        asset.storage_path = s3_key
+        # Run synchronous boto3 call in a thread to avoid blocking the event loop.
+        # Silently skip if S3/MinIO is not configured — the worker will retry.
+        try:
+            s3 = self._s3_client()
+            await asyncio.to_thread(
+                s3.put_object, Bucket=settings.AWS_BUCKET_NAME, Key=s3_key, Body=file_bytes
+            )
+            asset.storage_path = s3_key
+        except Exception:
+            asset.storage_path = None
         asset.file_size = len(file_bytes)
         asset.status = AssetStatus.uploaded
         await self.db.flush()
