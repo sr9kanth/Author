@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CARD } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/index";
@@ -50,6 +50,16 @@ export default function GeneratePage() {
 
   const [framework, setFramework] = useState("");
   const [aiModel, setAiModel] = useState("");
+
+  // Auto-select the first model with a configured key once models load.
+  useEffect(() => {
+    if (MODELS.length > 0 && aiModel === "") {
+      const first = MODELS.find((m) => m.key_configured);
+      if (first) setAiModel(first.id);
+    }
+  }, [MODELS]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selectedModelInfo = MODELS.find((m) => m.id === aiModel);
   const [type, setType] = useState("Multiple Choice");
   const [count, setCount] = useState(25);
   const [difficulty, setDifficulty] = useState<Record<string, boolean>>({ Easy: true, Medium: true, Hard: false });
@@ -58,6 +68,7 @@ export default function GeneratePage() {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [failed, setFailed] = useState(false);
+  const [failedReason, setFailedReason] = useState<string | null>(null);
 
   const toggleBloom = (b: string) =>
     setBloom((arr) => (arr.includes(b) ? arr.filter((x) => x !== b) : [...arr, b]));
@@ -65,6 +76,7 @@ export default function GeneratePage() {
   const run = async () => {
     setRunning(true);
     setFailed(false);
+    setFailedReason(null);
     setProgress(10);
     try {
       const selectedModel = MODELS.find((m) => m.id === aiModel);
@@ -84,6 +96,7 @@ export default function GeneratePage() {
         }
         if (current.status === "failed") {
           setFailed(true);
+          setFailedReason(current.error_message ?? null);
           return;
         }
         setProgress((p) => Math.min(90, Math.max(50, p)));
@@ -127,13 +140,23 @@ export default function GeneratePage() {
                 <select value={aiModel} onChange={(e) => setAiModel(e.target.value)} className={cn(INPUT_CLS, "appearance-none pr-10")}>
                   <option value="">Default (system setting)</option>
                   {MODELS.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.provider === "ollama" ? `🏠 ${m.id} (local)` : `${m.provider} / ${m.id}`}
+                    <option key={m.id} value={m.id} disabled={!m.key_configured}>
+                      {m.provider === "ollama"
+                        ? `🏠 ${m.id} (local)`
+                        : `${m.provider} / ${m.id}`}
+                      {!m.key_configured ? " (no key)" : ""}
                     </option>
                   ))}
                 </select>
                 <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
               </div>
+              {selectedModelInfo && !selectedModelInfo.key_configured && (
+                <p className="mt-2 flex items-center gap-1.5 text-[12px] text-amber-600 dark:text-amber-400">
+                  <AlertCircle size={13} className="shrink-0" />
+                  No API key configured for this provider. Add keys in{" "}
+                  <a href="/settings" className="underline hover:text-amber-500">Settings &rarr; API Keys</a>.
+                </p>
+              )}
             </Field>
 
             <div className="grid sm:grid-cols-2 gap-5">
@@ -212,7 +235,10 @@ export default function GeneratePage() {
               <div className="text-center space-y-3">
                 <div className="mx-auto w-12 h-12 rounded-full bg-rose-50 dark:bg-rose-500/15 text-rose-500 flex items-center justify-center"><AlertCircle size={24} /></div>
                 <p className="text-sm font-medium text-stone-900 dark:text-white">Generation failed</p>
-                <button onClick={() => { setRunning(false); setProgress(0); setFailed(false); }} className="text-xs text-stone-400 hover:text-stone-600 dark:hover:text-stone-300">Try again</button>
+                {failedReason && (
+                  <p className="text-xs text-rose-600 dark:text-rose-400 break-words">{failedReason}</p>
+                )}
+                <button onClick={() => { setRunning(false); setProgress(0); setFailed(false); setFailedReason(null); }} className="text-xs text-stone-400 hover:text-stone-600 dark:hover:text-stone-300">Try again</button>
               </div>
             )}
             {running && !failed && !done && (

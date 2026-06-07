@@ -16,6 +16,7 @@ import app.modules.quality.models
 import app.modules.workflow.models
 import app.modules.repository.models
 import app.modules.assembly.models
+import app.modules.audit.models
 
 # Feature modules (tables auto-created via create_missing_tables on boot)
 try:

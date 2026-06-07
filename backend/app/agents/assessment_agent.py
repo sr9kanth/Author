@@ -15,6 +15,12 @@ class AssessmentAgent(BaseAgent):
 
     async def execute(self, context: dict[str, Any]) -> AgentResult:
         """Run the full pipeline: generate → align → validate."""
+        try:
+            return await self._execute_pipeline(context)
+        except Exception as exc:
+            return AgentResult(success=False, error=str(exc))
+
+    async def _execute_pipeline(self, context: dict[str, Any]) -> AgentResult:
         generation_agent = GenerationAgent(self._orchestration_service)
         framework_agent = FrameworkAgent(self._orchestration_service)
         quality_agent = QualityAgent(self._orchestration_service)

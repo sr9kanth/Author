@@ -1,15 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { clearTokens } from "@/lib/auth";
-import { authApi, dashboardApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import type { User } from "@/types";
 import {
   LayoutDashboard, Layers, Database, Sparkles, ClipboardCheck,
-  Library, Package, LogOut, CheckSquare, SlidersHorizontal,
+  Library, Package, LogOut, CheckSquare, Settings,
 } from "lucide-react";
 
 const NAV = [
@@ -17,29 +14,13 @@ const NAV = [
   { key: "frameworks", label: "Frameworks", href: "/frameworks", Icon: Layers, section: "Content" },
   { key: "knowledge", label: "Knowledge", href: "/knowledge", Icon: Database, section: "Content" },
   { key: "generate", label: "Generate", href: "/generate", Icon: Sparkles, section: "Content", badge: "AI" },
-  { key: "review", label: "Review", href: "/review", Icon: ClipboardCheck, section: "Quality" },
+  { key: "review", label: "Review", href: "/review", Icon: ClipboardCheck, section: "Quality", count: 5 },
   { key: "repository", label: "Repository", href: "/repository", Icon: Library, section: "Quality" },
   { key: "assembly", label: "Assembly", href: "/assembly", Icon: Package, section: "Delivery" },
-  { key: "metadata", label: "Metadata", href: "/metadata", Icon: SlidersHorizontal, section: "Settings" },
+  { key: "settings", label: "Settings", href: "/settings", Icon: Settings, section: "System" },
 ];
 
-const ROLE_LABELS: Record<string, string> = {
-  administrator: "Administrator",
-  assessment_manager: "Assessment Manager",
-  author: "Author",
-  reviewer: "Reviewer",
-  auditor: "Auditor",
-  read_only: "Read Only",
-};
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-const SECTIONS = ["Overview", "Content", "Quality", "Delivery", "Settings"];
+const SECTIONS = ["Overview", "Content", "Quality", "Delivery", "System"];
 
 function LogoMark() {
   return (
@@ -60,16 +41,6 @@ function LogoMark() {
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [reviewCount, setReviewCount] = useState<number | null>(null);
-
-  useEffect(() => {
-    authApi.me().then(setUser).catch(() => setUser(null));
-    dashboardApi
-      .stats()
-      .then((s) => setReviewCount(s.awaiting_review))
-      .catch(() => setReviewCount(null));
-  }, []);
 
   function handleLogout() {
     clearTokens();
@@ -100,8 +71,6 @@ export default function Sidebar() {
               <div className="space-y-0.5">
                 {items.map((item) => {
                   const active = pathname === item.href || pathname.startsWith(item.href + "/");
-                  const count =
-                    item.key === "review" && reviewCount ? reviewCount : undefined;
                   return (
                     <Link
                       key={item.key}
@@ -131,7 +100,7 @@ export default function Sidebar() {
                           {item.badge}
                         </span>
                       )}
-                      {count != null && (
+                      {item.count != null && (
                         <span
                           className={cn(
                             "text-[11px] font-semibold min-w-[20px] text-center px-1.5 py-0.5 rounded-md",
@@ -140,7 +109,7 @@ export default function Sidebar() {
                               : "bg-white/[0.06] text-stone-400 group-hover:text-stone-200",
                           )}
                         >
-                          {count}
+                          {item.count}
                         </span>
                       )}
                     </Link>
@@ -150,6 +119,20 @@ export default function Sidebar() {
             </div>
           );
         })}
+
+        {/* Storage meter */}
+        <div className="mx-2 mt-6 rounded-xl bg-white/[0.03] border border-white/[0.06] p-3.5">
+          <div className="flex items-center justify-between text-[11px] mb-2">
+            <span className="text-stone-400 font-medium">Storage</span>
+            <span className="text-stone-500">6.2 / 20 GB</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-indigo-400 to-violet-500"
+              style={{ width: "31%" }}
+            />
+          </div>
+        </div>
       </nav>
 
       {/* User */}
@@ -159,15 +142,11 @@ export default function Sidebar() {
             className="inline-flex items-center justify-center rounded-full text-white font-semibold shrink-0 bg-indigo-500"
             style={{ width: 34, height: 34, fontSize: 13 }}
           >
-            {user ? initials(user.full_name) : "…"}
+            AO
           </span>
           <div className="flex-1 min-w-0 leading-tight">
-            <div className="text-[13px] font-medium text-stone-100 truncate">
-              {user?.full_name ?? "—"}
-            </div>
-            <div className="text-[11px] text-stone-500 truncate">
-              {user ? ROLE_LABELS[user.role] ?? user.role : ""}
-            </div>
+            <div className="text-[13px] font-medium text-stone-100 truncate">Admin</div>
+            <div className="text-[11px] text-stone-500 truncate">Assessment Designer</div>
           </div>
           <button
             onClick={handleLogout}

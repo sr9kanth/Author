@@ -28,11 +28,9 @@ interface Asset {
   storagePath: string | null;
 }
 
-function labelsFrom(rec: unknown): string[] {
-  if (!rec) return [];
-  if (Array.isArray(rec)) return rec.map((v) => String(v));
-  if (typeof rec === "object") return Object.keys(rec as Record<string, unknown>);
-  return [];
+function labelsFrom(rec: Record<string, unknown> | null): string[] {
+  if (!rec || typeof rec !== "object") return [];
+  return Object.keys(rec);
 }
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
@@ -164,6 +162,7 @@ export default function KnowledgePage() {
   const totals = {
     indexed: assets.filter((a) => a.status === "indexed").length,
     chunks: assets.reduce((s, a) => s + a.chunks, 0),
+    storage_bytes: (data?.items ?? []).reduce((s, a) => s + (a.file_size ?? 0), 0),
   };
 
   return (
@@ -260,7 +259,7 @@ export default function KnowledgePage() {
                   <span className="text-xs text-stone-400 dark:text-stone-500">chunks embedded</span>
                 </div>
                 <div className="h-1.5 rounded-full bg-stone-100 dark:bg-white/[0.06] overflow-hidden">
-                  <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500" style={{ width: "78%" }} />
+                  <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500" style={{ width: totals.chunks > 0 ? "100%" : "0%" }} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 pt-1">
@@ -269,7 +268,7 @@ export default function KnowledgePage() {
                   <div className="text-[11.5px] text-stone-500 dark:text-stone-400">Indexed</div>
                 </div>
                 <div className="rounded-xl bg-stone-50 dark:bg-white/[0.03] p-3">
-                  <div className="text-xl font-semibold text-stone-900 dark:text-white tabular-nums">6.2<span className="text-sm font-normal text-stone-400"> GB</span></div>
+                  <div className="text-xl font-semibold text-stone-900 dark:text-white tabular-nums">{fmtSize(totals.storage_bytes)}</div>
                   <div className="text-[11.5px] text-stone-500 dark:text-stone-400">Storage used</div>
                 </div>
               </div>

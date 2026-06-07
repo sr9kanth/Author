@@ -285,7 +285,26 @@ export const qualityApi = {
 
 // ---- Orchestration ----
 export const orchestrationApi = {
-  listModels: () => request<{ id: string; provider: string; context_window: number }[]>("/orchestration/models"),
+  listModels: () =>
+    request<{ id: string; provider: string; context_window: number; key_configured: boolean }[]>(
+      "/orchestration/models",
+    ),
+};
+
+// ---- Settings ----
+export interface ApiKeyStatus {
+  provider: string;
+  configured: boolean;
+  masked_key: string | null;
+}
+
+export const settingsApi = {
+  getApiKeys: () => request<ApiKeyStatus[]>("/settings/api-keys"),
+  saveApiKey: (provider: string, api_key: string) =>
+    request<ApiKeyStatus[]>("/settings/api-keys", {
+      method: "POST",
+      body: JSON.stringify({ provider, api_key }),
+    }),
 };
 
 export { ApiError };

@@ -1,6 +1,8 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 
 from app.core.deps import CurrentUserID, DBSession
+from app.core.security import decode_token
+from app.modules.audit.service import AuditService
 from app.modules.auth.schemas import LoginRequest, RefreshRequest, TokenResponse, UserCreate, UserRead, UserUpdate
 from app.modules.auth.service import AuthService
 
@@ -17,12 +19,25 @@ async def register(data: UserCreate, db: DBSession) -> UserRead:
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(data: LoginRequest, db: DBSession) -> TokenResponse:
+async def login(data: LoginRequest, db: DBSession, request: Request) -> TokenResponse:
     service = AuthService(db)
     try:
-        return await service.authenticate(data)
+        token_response = await service.authenticate(data)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
+    try:
+        payload = decode_token(token_response.access_token)
+        user_id = payload.get("sub")
+        await AuditService(db).log(
+            user_id=user_id,
+            action="auth.login",
+            resource_type="user",
+            resource_id=user_id,
+            ip_address=request.client.host if request.client else None,
+        )
+    except Exception:
+        pass
+    return token_response
 
 
 @router.post("/refresh", response_model=TokenResponse)

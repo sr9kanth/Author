@@ -23,23 +23,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# The frontend calls the backend through a same-origin Next.js proxy
-# (see frontend/next.config.mjs), so browsers never make cross-origin
-# requests in normal operation. CORS is therefore restricted to an explicit
-# allow-list (configurable via CORS_ORIGINS) rather than a wildcard, which is
-# kept only for direct API access during local development / tooling.
-_cors_origins = settings.CORS_ORIGINS + [
-    "https://writer-two-iota.vercel.app",
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:3001",
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins,
-    allow_credentials=False,
+    allow_origins=settings.CORS_ORIGINS + [
+        "https://writer-two-iota.vercel.app",
+        "http://localhost:3000",
+        "http://localhost:3001",
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -56,8 +47,8 @@ from app.modules.repository.router import router as repository_router
 from app.modules.workflow.router import router as workflow_router
 from app.modules.assembly.router import router as assembly_router
 from app.modules.dashboard.router import router as dashboard_router
-from app.modules.guides.router import router as guides_router
-from app.modules.metadata.router import router as metadata_router
+from app.modules.audit.router import router as audit_router
+from app.modules.settings.router import router as settings_router
 
 API_PREFIX = "/api/v1"
 
@@ -72,8 +63,8 @@ app.include_router(repository_router, prefix=API_PREFIX)
 app.include_router(workflow_router, prefix=API_PREFIX)
 app.include_router(assembly_router, prefix=API_PREFIX)
 app.include_router(dashboard_router, prefix=API_PREFIX)
-app.include_router(guides_router, prefix=API_PREFIX)
-app.include_router(metadata_router, prefix=API_PREFIX)
+app.include_router(audit_router, prefix=API_PREFIX)
+app.include_router(settings_router, prefix=API_PREFIX)
 
 
 @app.get("/health", tags=["health"])

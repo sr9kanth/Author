@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 
 from app.core.deps import CurrentUserID, DBSession
+from app.modules.audit.service import AuditService
 from app.modules.generation.schemas import (
     GeneratedContentList,
     GeneratedContentRead,
@@ -16,11 +17,21 @@ router = APIRouter(prefix="/generation", tags=["generation"])
 
 
 @router.post("/jobs", response_model=GenerationJobRead, status_code=status.HTTP_201_CREATED)
-async def create_job(data: GenerationJobCreate, current_user_id: CurrentUserID, db: DBSession) -> GenerationJobRead:
+async def create_job(data: GenerationJobCreate, current_user_id: CurrentUserID, db: DBSession, request: Request) -> GenerationJobRead:
     service = GenerationService(db)
     job = await service.create_job(data, current_user_id)
     # Dispatch Celery task
     run_generation_job.delay(str(job.id))
+    try:
+        await AuditService(db).log(
+            user_id=current_user_id,
+            action="generation.create_job",
+            resource_type="generation_job",
+            resource_id=str(job.id),
+            ip_address=request.client.host if request.client else None,
+        )
+    except Exception:
+        pass
     return job
 
 

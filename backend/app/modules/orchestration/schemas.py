@@ -29,6 +29,7 @@ class ModelInfo(BaseModel):
     provider: str
     context_window: int
     supports_vision: bool = False
+    key_configured: bool = True
 
 
 class CostEstimate(BaseModel):

@@ -65,6 +65,8 @@ services:
     ports:
       - "8000:8000"
     env_file:
+      # NOTE: If LITELLM_DEFAULT_PROVIDER=deepseek (the default), you must set
+      # DEEPSEEK_API_KEY in your .env file — generation will always fail without it.
       - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://aip:aip@postgres:5432/aip
@@ -92,6 +94,8 @@ services:
       dockerfile: backend/Dockerfile
     command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2 --max-tasks-per-child=10
     env_file:
+      # NOTE: DEEPSEEK_API_KEY (and any other AI provider keys) must be in .env —
+      # the worker runs generation jobs and will fail if the key is missing.
       - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://aip:aip@postgres:5432/aip

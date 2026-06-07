@@ -1,6 +1,8 @@
 """LiteLLM wrapper for multi-provider AI orchestration."""
 
+import asyncio
 import os
+import threading
 import time
 from typing import Any
 
@@ -10,6 +12,15 @@ import structlog
 from app.core.config import settings
 
 logger = structlog.get_logger(__name__)
+
+# Retry configuration
+MAX_RETRIES = 3
+RETRY_DELAYS = [2, 4, 8]  # exponential backoff in seconds
+
+# Circuit-breaker: provider -> consecutive failure count
+_provider_failures: dict[str, int] = {}
+_circuit_lock = threading.Lock()
+_CIRCUIT_OPEN_THRESHOLD = 5
 
 
 class AIOrchestrationService:
@@ -125,7 +136,20 @@ class AIOrchestrationService:
         raise RuntimeError(f"All model fallbacks exhausted. Last error: {last_exc}")
 
     async def get_available_models(self) -> list[dict]:
-        models = [
+        # Check which provider keys are configured (env var takes precedence over settings
+        # so that runtime updates via the settings API are reflected immediately).
+        def _key_set(env_var: str, settings_val: str) -> bool:
+            return bool(os.environ.get(env_var) or settings_val)
+
+        provider_key_configured: dict[str, bool] = {
+            "anthropic": _key_set("ANTHROPIC_API_KEY", settings.ANTHROPIC_API_KEY),
+            "openai": _key_set("OPENAI_API_KEY", settings.OPENAI_API_KEY),
+            "gemini": _key_set("GEMINI_API_KEY", settings.GEMINI_API_KEY),
+            "deepseek": _key_set("DEEPSEEK_API_KEY", settings.DEEPSEEK_API_KEY),
+            "ollama": True,  # local, no key needed
+        }
+
+        raw_models = [
             {"id": "claude-opus-4-8", "provider": "anthropic", "context_window": 200000},
             {"id": "claude-sonnet-4-5", "provider": "anthropic", "context_window": 200000},
             {"id": "gpt-4o", "provider": "openai", "context_window": 128000},
@@ -135,5 +159,10 @@ class AIOrchestrationService:
             {"id": "deepseek-chat", "provider": "deepseek", "context_window": 128000},
             {"id": "deepseek-reasoner", "provider": "deepseek", "context_window": 128000},
             {"id": "llama3.2", "provider": "ollama", "context_window": 128000},
+        ]
+
+        models = [
+            {**m, "key_configured": provider_key_configured.get(m["provider"], False)}
+            for m in raw_models
         ]
         return models
