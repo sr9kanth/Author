@@ -37,9 +37,9 @@ export interface KnowledgeAsset {
   content_type: ContentType;
   storage_path: string | null;
   file_size: number | null;
-  extracted_topics: Record<string, unknown> | null;
-  extracted_concepts: Record<string, unknown> | null;
-  extracted_outcomes: Record<string, unknown> | null;
+  extracted_topics: unknown[] | Record<string, unknown> | null;
+  extracted_concepts: unknown[] | Record<string, unknown> | null;
+  extracted_outcomes: unknown[] | Record<string, unknown> | null;
   keywords: string[] | null;
   status: AssetStatus;
   created_by: string;

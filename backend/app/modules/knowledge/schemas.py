@@ -23,9 +23,12 @@ class KnowledgeAssetRead(BaseModel):
     content_type: ContentType
     storage_path: str | None
     file_size: int | None
-    extracted_topics: dict | None
-    extracted_concepts: dict | None
-    extracted_outcomes: dict | None
+    # The extraction worker stores these as lists (analyze_with_ai returns
+    # list[str]); older records may hold dicts. Accept either shape so reads
+    # never 500 on a type mismatch.
+    extracted_topics: list | dict | None
+    extracted_concepts: list | dict | None
+    extracted_outcomes: list | dict | None
     keywords: list | None
     status: AssetStatus
     created_by: uuid.UUID

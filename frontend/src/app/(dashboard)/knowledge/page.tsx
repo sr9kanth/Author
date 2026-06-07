@@ -28,9 +28,11 @@ interface Asset {
   storagePath: string | null;
 }
 
-function labelsFrom(rec: Record<string, unknown> | null): string[] {
-  if (!rec || typeof rec !== "object") return [];
-  return Object.keys(rec);
+function labelsFrom(rec: unknown): string[] {
+  if (!rec) return [];
+  if (Array.isArray(rec)) return rec.map((v) => String(v));
+  if (typeof rec === "object") return Object.keys(rec as Record<string, unknown>);
+  return [];
 }
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
