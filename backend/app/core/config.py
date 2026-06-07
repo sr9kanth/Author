@@ -36,6 +36,26 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     AI_REQUEST_TIMEOUT: int = 60  # seconds; prevents worker tasks hanging on a stalled AI call
 
+    # --- Embeddings / RAG ---
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    EMBEDDING_DIM: int = 1536
+    EMBEDDING_PROVIDER: str = "openai"  # litellm-style; needs an OpenAI-compatible key
+
+    @property
+    def embeddings_enabled(self) -> bool:
+        """True only when a key for the configured embedding provider is set.
+
+        Embeddings require an OpenAI-compatible key. When absent (e.g. local dev
+        with only DeepSeek), the RAG pipeline degrades to keyword/text search.
+        """
+        provider = (self.EMBEDDING_PROVIDER or "openai").lower()
+        provider_keys = {
+            "openai": self.OPENAI_API_KEY,
+            "gemini": self.GEMINI_API_KEY,
+            "anthropic": self.ANTHROPIC_API_KEY,
+        }
+        return bool(provider_keys.get(provider, self.OPENAI_API_KEY))
+
     ENVIRONMENT: str = "development"
     # Stored as a raw string (comma-separated or JSON) to avoid pydantic-settings
     # auto JSON-decoding env vars. Use CORS_ORIGINS for the parsed list.

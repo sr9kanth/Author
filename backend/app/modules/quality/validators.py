@@ -1,7 +1,30 @@
 """Individual validation services for generated assessment content."""
 
+import json
 import re
 from dataclasses import dataclass, field
+
+
+def _ai_key_available() -> bool:
+    """True if at least one provider API key is configured in settings."""
+    from app.core.config import settings
+
+    return any(
+        bool(getattr(settings, attr, ""))
+        for attr in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "DEEPSEEK_API_KEY")
+    )
+
+
+def _extract_json(text: str) -> dict:
+    """Robustly extract the first JSON object from an LLM response."""
+    cleaned = text.strip()
+    # Strip code fences such as ```json ... ```
+    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+    cleaned = re.sub(r"\s*```$", "", cleaned)
+    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+    if not match:
+        raise ValueError("No JSON object found in model response")
+    return json.loads(match.group(0))
 
 
 @dataclass
@@ -182,22 +205,69 @@ class FrameworkAlignmentValidator:
 
 
 class DifficultyPredictor:
-    """Predicts and validates the difficulty of a question."""
+    """Predicts and validates the difficulty of a question.
 
-    async def validate(self, content: str, context: dict) -> ValidationResult:
+    AI-backed: uses an LLM-as-judge to rate difficulty when a declared
+    difficulty and a provider API key are available, otherwise falls back to a
+    word-count heuristic. Difficulty is advisory and always passes.
+    """
+
+    def _heuristic(self, content: str, context: dict) -> ValidationResult:
         issues = []
         recommendations = []
 
         declared_difficulty: str = context.get("metadata", {}).get("difficulty", "")
         word_count = len(content.split())
 
-        # Very rough heuristic – real implementation would use ML
+        # Very rough heuristic – AI path is preferred when available.
         if word_count < 15 and declared_difficulty == "hard":
             issues.append("Short question declared as hard; verify difficulty level")
             recommendations.append("Review whether difficulty rating is appropriate")
 
         score = 1.0 if not issues else 0.7
         return ValidationResult(score=score, passed=True, issues=issues, recommendations=recommendations)
+
+    async def validate(self, content: str, context: dict) -> ValidationResult:
+        declared_difficulty: str = context.get("metadata", {}).get("difficulty", "")
+
+        if not declared_difficulty or not _ai_key_available():
+            return self._heuristic(content, context)
+
+        try:
+            from app.modules.orchestration.service import AIOrchestrationService
+
+            ai = AIOrchestrationService()
+            prompt = (
+                "You are an assessment difficulty expert. Rate the difficulty of the "
+                "following assessment item as one of: easy, medium, hard. "
+                "Return STRICT JSON only, no prose, in the form: "
+                '{"predicted":"easy|medium|hard","confidence":0.0-1.0,"rationale":"..."}.\n\n'
+                f"Item:\n{content}"
+            )
+            raw = await ai.complete([{"role": "user", "content": prompt}])
+            data = _extract_json(raw)
+
+            predicted = str(data.get("predicted", "")).lower().strip()
+            confidence = float(data.get("confidence", 0.0))
+            rationale = str(data.get("rationale", ""))
+
+            issues = []
+            recommendations = []
+            match = predicted == declared_difficulty.lower().strip()
+            if not match:
+                issues.append(
+                    f"Predicted difficulty '{predicted}' does not match declared '{declared_difficulty}'"
+                )
+                recommendations.append(
+                    f"Review the difficulty rating. Rationale: {rationale}"
+                )
+
+            score = confidence if match else 0.6
+            return ValidationResult(score=score, passed=True, issues=issues, recommendations=recommendations)
+        except Exception:
+            result = self._heuristic(content, context)
+            result.recommendations.append("Difficulty assessed via heuristic fallback (AI unavailable)")
+            return result
 
 
 class ReadingLevelAnalyzer:
@@ -222,22 +292,18 @@ class ReadingLevelAnalyzer:
 
 
 class HallucinationDetector:
-    """Detects potential AI hallucinations by checking factual consistency."""
+    """Detects potential AI hallucinations by checking factual consistency.
 
-    async def validate(self, content: str, context: dict) -> ValidationResult:
+    AI-backed: uses an LLM-as-judge fact-checker to compare the content against
+    the provided source text when a provider API key is available, otherwise
+    falls back to a keyword-overlap heuristic.
+    """
+
+    def _heuristic(self, content: str, source_text: str) -> ValidationResult:
         issues = []
         recommendations = []
 
-        source_text: str = context.get("source_text", "")
-        if not source_text:
-            return ValidationResult(
-                score=0.5,
-                passed=True,
-                issues=["No source text provided for hallucination check"],
-                recommendations=["Provide source knowledge assets to verify factual accuracy"],
-            )
-
-        # Basic keyword overlap check; production would use embedding similarity
+        # Basic keyword overlap check; AI path is preferred when available.
         content_words = set(content.lower().split())
         source_words = set(source_text.lower().split())
         overlap = len(content_words & source_words) / max(len(content_words), 1)
@@ -248,3 +314,50 @@ class HallucinationDetector:
 
         score = min(1.0, overlap * 2)
         return ValidationResult(score=score, passed=score >= 0.3, issues=issues, recommendations=recommendations)
+
+    async def validate(self, content: str, context: dict) -> ValidationResult:
+        source_text: str = context.get("source_text", "")
+        if not source_text:
+            return ValidationResult(
+                score=0.5,
+                passed=True,
+                issues=["No source text provided for hallucination check"],
+                recommendations=["Provide source knowledge assets to verify factual accuracy"],
+            )
+
+        if not _ai_key_available():
+            result = self._heuristic(content, source_text)
+            result.recommendations.append("Hallucination checked via keyword-overlap heuristic fallback (AI unavailable)")
+            return result
+
+        try:
+            from app.modules.orchestration.service import AIOrchestrationService
+
+            ai = AIOrchestrationService()
+            prompt = (
+                "You are a meticulous fact-checker. Compare the assessment content "
+                "against the provided source material. Determine whether every factual "
+                "claim in the content is supported by the source. "
+                "Return STRICT JSON only, no prose, in the form: "
+                '{"supported": true/false, "confidence": 0.0-1.0, "unsupported_claims": ["..."]}.\n\n'
+                f"SOURCE:\n{source_text}\n\nCONTENT:\n{content}"
+            )
+            raw = await ai.complete([{"role": "user", "content": prompt}])
+            data = _extract_json(raw)
+
+            supported = bool(data.get("supported", False))
+            confidence = float(data.get("confidence", 0.0))
+            unsupported_claims = data.get("unsupported_claims", []) or []
+
+            issues = [f"Unsupported claim: {c}" for c in unsupported_claims]
+            recommendations = []
+            if not supported:
+                recommendations.append("Verify all factual claims against the source knowledge assets")
+
+            score = confidence if supported else confidence * 0.3
+            passed = supported and confidence >= 0.6
+            return ValidationResult(score=score, passed=passed, issues=issues, recommendations=recommendations)
+        except Exception:
+            result = self._heuristic(content, source_text)
+            result.recommendations.append("Hallucination checked via keyword-overlap heuristic fallback (AI error)")
+            return result

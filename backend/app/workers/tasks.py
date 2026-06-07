@@ -73,6 +73,43 @@ def process_knowledge_asset(self, asset_id: str) -> dict:
                 asset.extracted_concepts = analysis.get("concepts", [])
                 asset.extracted_outcomes = analysis.get("outcomes", [])
                 asset.keywords = analysis.get("keywords", [])
+
+                # --- RAG indexing: chunk, embed (best-effort), persist ---
+                try:
+                    from sqlalchemy import delete as sa_delete
+                    from app.modules.knowledge.chunk_models import DocumentChunk
+                    from app.modules.knowledge.chunking import chunk_text
+                    from app.modules.knowledge.embeddings import embed_texts
+
+                    raw_text = extracted.get("raw_text", "") or ""
+                    chunk_strings = chunk_text(raw_text)
+
+                    # Re-index safety: drop any prior chunks for this asset.
+                    await db.execute(sa_delete(DocumentChunk).where(DocumentChunk.asset_id == asset.id))
+
+                    if chunk_strings:
+                        vectors = await embed_texts(chunk_strings)  # may be None
+                        for idx, chunk_str in enumerate(chunk_strings):
+                            embedding = vectors[idx] if vectors and idx < len(vectors) else None
+                            db.add(
+                                DocumentChunk(
+                                    asset_id=asset.id,
+                                    chunk_index=idx,
+                                    content=chunk_str,
+                                    embedding=embedding,
+                                    token_count=int(len(chunk_str.split()) / 0.75),
+                                )
+                            )
+                    logger.info(
+                        "knowledge_asset_indexed",
+                        asset_id=asset_id,
+                        chunk_count=len(chunk_strings),
+                        embedded=bool(chunk_strings),
+                    )
+                except Exception as index_exc:
+                    # Indexing failure must not fail the whole asset processing.
+                    logger.warning("knowledge_asset_indexing_failed", asset_id=asset_id, error=str(index_exc))
+
                 asset.status = AssetStatus.processed
                 await db.commit()
                 return {"status": "processed", "asset_id": asset_id}
@@ -122,9 +159,43 @@ def run_generation_job(self, job_id: str) -> dict:
                     )
                     config = cfg_result.scalar_one_or_none()
 
-                # --- Load and concatenate knowledge asset text ---
+                # --- Build framework context string (also used to form the
+                #     retrieval query) ---
+                framework_context = ""
+                if config and config.framework_id:
+                    from app.modules.frameworks.models import Framework
+                    fw_result = await db.execute(
+                        select(Framework).where(Framework.id == config.framework_id)
+                    )
+                    fw = fw_result.scalar_one_or_none()
+                    if fw:
+                        framework_context = f"{fw.name} (v{fw.version})"
+                        if fw.description:
+                            framework_context += f": {fw.description}"
+
+                # --- Retrieval-augmented knowledge text ---
                 knowledge_text = ""
                 if job.knowledge_asset_ids:
+                    try:
+                        from app.modules.knowledge.retrieval import retrieve_chunks
+
+                        topic_terms: list[str] = []
+                        if config and getattr(config, "name", None):
+                            topic_terms.append(config.name)
+                        query = " ".join(
+                            t for t in ([framework_context] + topic_terms) if t
+                        ).strip() or "assessment questions"
+
+                        retrieved = await retrieve_chunks(
+                            db, query, list(job.knowledge_asset_ids), k=8
+                        )
+                        if retrieved:
+                            knowledge_text = "\n\n".join(retrieved)
+                    except Exception as ret_exc:
+                        logger.warning("retrieval_failed", job_id=job_id, error=str(ret_exc))
+
+                # --- Fallback: original asset-summary concatenation ---
+                if not knowledge_text and job.knowledge_asset_ids:
                     from app.modules.knowledge.models import KnowledgeAsset
                     import boto3
                     from app.modules.knowledge.extractor import ContentExtractor

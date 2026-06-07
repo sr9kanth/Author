@@ -7,6 +7,7 @@ model modules should be added here.
 # noqa: F401
 import app.modules.auth.models
 import app.modules.knowledge.models
+import app.modules.knowledge.chunk_models
 import app.modules.frameworks.models
 import app.modules.assessment_config.models
 import app.modules.generation.models
