@@ -85,9 +85,14 @@ export default function GeneratePage() {
         ai_model: selectedModel?.id,
         ai_provider: selectedModel?.provider,
       });
-      setProgress(50);
-      // Poll until terminal state.
-      const poll = async (): Promise<void> => {
+      setProgress(30);
+      // Poll until terminal state, with a hard timeout so a stuck/lost worker
+      // surfaces an error instead of spinning forever.
+      const POLL_INTERVAL_MS = 2000;
+      const TIMEOUT_MS = 180_000; // 3 minutes
+      const maxAttempts = Math.ceil(TIMEOUT_MS / POLL_INTERVAL_MS);
+
+      const poll = async (attempt: number): Promise<void> => {
         const current = await generationApi.getJob(job.id);
         if (current.status === "completed") {
           setProgress(100);
@@ -96,16 +101,26 @@ export default function GeneratePage() {
         }
         if (current.status === "failed") {
           setFailed(true);
-          setFailedReason(current.error_message ?? null);
+          setFailedReason(current.error_message ?? "The generation job failed.");
           return;
         }
-        setProgress((p) => Math.min(90, Math.max(50, p)));
-        await new Promise((r) => setTimeout(r, 2000));
-        return poll();
+        if (attempt >= maxAttempts) {
+          setFailed(true);
+          setFailedReason(
+            "Timed out after 3 minutes. The job may still be running — check the Review page shortly, or confirm the worker is up.",
+          );
+          return;
+        }
+        // Advance progress toward 95% asymptotically so the bar always moves
+        // while the job is running/pending.
+        setProgress((p) => Math.min(95, p + Math.max(1, Math.round((95 - p) * 0.15))));
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+        return poll(attempt + 1);
       };
-      await poll();
-    } catch {
+      await poll(0);
+    } catch (err) {
       setFailed(true);
+      setFailedReason(err instanceof Error ? err.message : "Request failed.");
     }
   };
 
