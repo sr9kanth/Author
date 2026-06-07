@@ -50,14 +50,10 @@ async def get_db() -> AsyncSession:
 
 
 async def init_db() -> None:
-    """Initialize pgvector extension and create tables."""
+    """Initialize pgvector extension only. Schema is managed by Alembic."""
     import sqlalchemy as sa
     async with async_engine.begin() as conn:
         await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS vector"))
-        # Drop and recreate enum types so create_all doesn't fail if they exist
-        for type_name in ("userrole", "contenttype", "assetstatus", "jobstatus", "contentstatus", "workflowstate"):
-            await conn.execute(sa.text(f"DROP TYPE IF EXISTS {type_name} CASCADE"))
-        await conn.run_sync(Base.metadata.create_all)
 
 
 async def create_missing_tables() -> None:

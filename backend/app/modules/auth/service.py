@@ -13,6 +13,7 @@ class AuthService:
         self.db = db
 
     async def create_user(self, data: UserCreate) -> UserRead:
+        data.email = data.email.strip().lower()
         existing = await self.db.execute(select(User).where(User.email == data.email))
         if existing.scalar_one_or_none():
             raise ValueError("Email already registered")
@@ -28,7 +29,7 @@ class AuthService:
         return UserRead.model_validate(user)
 
     async def authenticate(self, data: LoginRequest) -> TokenResponse:
-        result = await self.db.execute(select(User).where(User.email == data.email))
+        result = await self.db.execute(select(User).where(User.email == data.email.strip().lower()))
         user = result.scalar_one_or_none()
         if not user or not verify_password(data.password, user.hashed_password):
             raise ValueError("Invalid email or password")
