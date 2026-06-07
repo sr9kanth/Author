@@ -1,10 +1,51 @@
 """Agent responsible for generating assessment questions."""
 
 import json
+import re
 from typing import Any
 
 from app.agents.base import AgentResult, BaseAgent
 from app.modules.generation.prompts import QUESTION_GENERATION_SYSTEM, QUESTION_GENERATION_USER_TEMPLATE
+
+
+def _parse_questions(raw: str) -> list[dict]:
+    """Robustly extract a JSON array of question objects from a model response.
+
+    Models (esp. DeepSeek) frequently wrap JSON in ```json fences or add a
+    sentence of preamble despite instructions. Strip fences, then fall back to
+    locating the first '[' .. last ']' span. Also accept an object with a
+    top-level "questions" array.
+    """
+    text = raw.strip()
+
+    # Strip ```json ... ``` or ``` ... ``` fences.
+    fence = re.match(r"^```(?:json)?\s*(.*?)\s*```$", text, re.DOTALL)
+    if fence:
+        text = fence.group(1).strip()
+
+    def _coerce(parsed: Any) -> list[dict]:
+        if isinstance(parsed, list):
+            return parsed
+        if isinstance(parsed, dict) and isinstance(parsed.get("questions"), list):
+            return parsed["questions"]
+        raise ValueError("Parsed JSON is not a list of questions")
+
+    try:
+        return _coerce(json.loads(text))
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Fall back to the widest [...] span.
+    start, end = text.find("["), text.rfind("]")
+    if start != -1 and end != -1 and end > start:
+        return _coerce(json.loads(text[start:end + 1]))
+
+    # Or a single {...} object span.
+    start, end = text.find("{"), text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        return _coerce(json.loads(text[start:end + 1]))
+
+    raise json.JSONDecodeError("No JSON array/object found in response", text, 0)
 
 
 class GenerationAgent(BaseAgent):
@@ -41,8 +82,13 @@ class GenerationAgent(BaseAgent):
         ]
 
         try:
-            raw = await self._complete(messages, max_tokens=8192)
-            questions = json.loads(raw)
+            raw = await self._complete(
+                messages,
+                max_tokens=8192,
+                model=context.get("ai_model"),
+                provider=context.get("ai_provider"),
+            )
+            questions = _parse_questions(raw)
             return AgentResult(success=True, data={"questions": questions})
         except json.JSONDecodeError as exc:
             return AgentResult(success=False, error=f"Failed to parse AI response as JSON: {exc}")

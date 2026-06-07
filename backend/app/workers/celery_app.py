@@ -4,6 +4,12 @@ from celery import Celery
 
 from app.core.config import settings
 
+# Register every ORM model on Base.metadata so the worker's mapper registry can
+# resolve string-based relationships (e.g. GenerationJob -> AssessmentConfiguration)
+# when tasks query the DB. Without this, a worker that only imports a subset of
+# models raises InvalidRequestError: "failed to locate a name".
+import app.models  # noqa: E402,F401
+
 celery_app = Celery(
     "aip",
     broker=settings.REDIS_URL,
