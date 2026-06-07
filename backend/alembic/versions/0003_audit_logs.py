@@ -18,6 +18,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Idempotent: create_missing_tables() on boot may have already created this
+    # table before the migration ran.
+    if sa.inspect(op.get_bind()).has_table("audit_logs"):
+        return
     op.create_table(
         "audit_logs",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),

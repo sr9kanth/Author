@@ -17,6 +17,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Idempotent: create_missing_tables() on boot may have already created this
+    # table before the migration ran.
+    if sa.inspect(op.get_bind()).has_table("app_settings"):
+        return
     op.create_table(
         "app_settings",
         sa.Column("key", sa.String(200), primary_key=True, nullable=False),
