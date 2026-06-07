@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { clearTokens } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { knowledgeApi } from "@/lib/api";
 import {
   LayoutDashboard, Layers, Database, Sparkles, ClipboardCheck,
   Library, Package, LogOut, CheckSquare, Settings,
@@ -38,9 +40,19 @@ function LogoMark() {
   );
 }
 
+const MAX_BYTES = 20 * 1024 * 1024 * 1024; // 20 GB
+
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const [storageBytes, setStorageBytes] = useState<number | null>(null);
+
+  useEffect(() => {
+    knowledgeApi.list(0, 1000).then((data) => {
+      const total = (data?.items ?? []).reduce((s: number, a: { file_size?: number | null }) => s + (a.file_size ?? 0), 0);
+      setStorageBytes(total);
+    }).catch(() => {});
+  }, []);
 
   function handleLogout() {
     clearTokens();
@@ -124,12 +136,16 @@ export default function Sidebar() {
         <div className="mx-2 mt-6 rounded-xl bg-white/[0.03] border border-white/[0.06] p-3.5">
           <div className="flex items-center justify-between text-[11px] mb-2">
             <span className="text-stone-400 font-medium">Storage</span>
-            <span className="text-stone-500">6.2 / 20 GB</span>
+            <span className="text-stone-500">
+              {storageBytes !== null
+                ? `${(storageBytes / 1024 / 1024 / 1024).toFixed(1)} / 20 GB`
+                : "— / 20 GB"}
+            </span>
           </div>
           <div className="h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
             <div
               className="h-full rounded-full bg-gradient-to-r from-indigo-400 to-violet-500"
-              style={{ width: "31%" }}
+              style={{ width: storageBytes !== null ? `${Math.min(100, (storageBytes / MAX_BYTES) * 100).toFixed(1)}%` : "0%" }}
             />
           </div>
         </div>

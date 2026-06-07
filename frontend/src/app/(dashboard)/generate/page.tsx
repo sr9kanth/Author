@@ -69,6 +69,7 @@ export default function GeneratePage() {
   const [difficulty, setDifficulty] = useState<Record<string, boolean>>({ Easy: true, Medium: true, Hard: false });
   const [bloom, setBloom] = useState(["Understand", "Apply"]);
   const [creativity, setCreativity] = useState(40);
+  const [instructions, setInstructions] = useState("");
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [failed, setFailed] = useState(false);
@@ -84,8 +85,18 @@ export default function GeneratePage() {
     setProgress(10);
     try {
       const selectedModel = MODELS.find((m) => m.id === aiModel);
+      const difficultyWeights: Record<string, number> = { easy: 3, medium: 5, hard: 2 };
+      const selectedDifficulties = Object.entries(difficulty)
+        .filter(([, on]) => on)
+        .reduce((acc, [k]) => ({ ...acc, [k.toLowerCase()]: difficultyWeights[k.toLowerCase()] ?? 2 }), {} as Record<string, number>);
       const job = await generationApi.createJob({
-        configuration_id: framework || undefined,
+        framework_id: framework || undefined,
+        question_count: count,
+        question_types: [type.toLowerCase().replace(/ \/ /g, "_").replace(/ /g, "_")],
+        difficulty_levels: Object.keys(selectedDifficulties).length ? selectedDifficulties : undefined,
+        cognitive_levels: bloom.length ? Object.fromEntries(bloom.map((b) => [b.toLowerCase(), 2])) : undefined,
+        reading_level: "intermediate",
+        instructions: instructions.trim() || undefined,
         ai_model: selectedModel?.id,
         ai_provider: selectedModel?.provider,
       });
@@ -229,7 +240,7 @@ export default function GeneratePage() {
             </Field>
 
             <Field label="Additional instructions">
-              <textarea rows={3} placeholder="e.g. Use clinical scenarios set in community-care contexts. Avoid abbreviations in stems." className={cn(INPUT_CLS, "resize-none")} />
+              <textarea rows={3} value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="e.g. Use clinical scenarios set in community-care contexts. Avoid abbreviations in stems." className={cn(INPUT_CLS, "resize-none")} />
             </Field>
           </div>
         </div>
