@@ -1,7 +1,7 @@
 """audit_logs table
 
 Revision ID: 0003
-Revises: 0002
+Revises: 0002 (chains after document_chunks; both previously branched off 0001)
 Create Date: 2026-06-07 00:00:00.000000
 
 """
@@ -12,7 +12,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = "0003"
-down_revision = "0001"
+down_revision = "0002"
 branch_labels = None
 depends_on = None
 
