@@ -2,23 +2,10 @@
 const nextConfig = {
   output: "standalone",
   reactStrictMode: true,
-  async rewrites() {
-    // BACKEND_URL is a server-side env var (no NEXT_PUBLIC_ prefix) so it
-    // can be set differently per environment without a rebuild:
-    //   local Docker:  http://backend:8000  (container DNS)
-    //   Railway:       http://backend:8000  (Railway private network)
-    //   dev machine:   http://localhost:8000
-    const backendUrl =
-      process.env.BACKEND_URL ??
-      process.env.NEXT_PUBLIC_API_URL ??
-      "http://localhost:8000";
-    return [
-      {
-        source: "/api/proxy/:path*",
-        destination: `${backendUrl}/api/:path*`,
-      },
-    ];
-  },
+  // NOTE: We intentionally do NOT proxy via `rewrites()`. Next.js evaluates
+  // rewrite destinations at BUILD time and bakes them into the manifest, so a
+  // runtime BACKEND_URL has no effect. The proxy lives in a Route Handler at
+  // src/app/api/proxy/[...path]/route.ts, which reads BACKEND_URL per-request.
 };
 
 export default nextConfig;
