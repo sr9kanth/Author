@@ -199,7 +199,12 @@ class AIOrchestrationService:
             "openai": _key_set("OPENAI_API_KEY", settings.OPENAI_API_KEY),
             "gemini": _key_set("GEMINI_API_KEY", settings.GEMINI_API_KEY),
             "deepseek": _key_set("DEEPSEEK_API_KEY", settings.DEEPSEEK_API_KEY),
-            "ollama": True,  # local, no key needed
+            # Ollama needs no key, but it's only usable if a local server is
+            # actually running and reachable. Gate it behind OLLAMA_ENABLED so
+            # it isn't presented as an available fallback (and silently
+            # auto-selected) when no Ollama is up — which fails with
+            # "Cannot connect to host localhost:11434".
+            "ollama": settings.OLLAMA_ENABLED,
         }
 
         raw_models = [

@@ -51,11 +51,15 @@ export default function GeneratePage() {
   const [framework, setFramework] = useState("");
   const [aiModel, setAiModel] = useState("");
 
-  // Auto-select the first model with a configured key once models load.
+  // Auto-select the first usable model once models load. Prefer a cloud
+  // provider with a configured key; fall back to Ollama only if it's the
+  // only option (it requires a locally-running server).
   useEffect(() => {
     if (MODELS.length > 0 && aiModel === "") {
-      const first = MODELS.find((m) => m.key_configured);
-      if (first) setAiModel(first.id);
+      const cloud = MODELS.find((m) => m.key_configured && m.provider !== "ollama");
+      const any = MODELS.find((m) => m.key_configured);
+      const pick = cloud ?? any;
+      if (pick) setAiModel(pick.id);
     }
   }, [MODELS]); // eslint-disable-line react-hooks/exhaustive-deps
 

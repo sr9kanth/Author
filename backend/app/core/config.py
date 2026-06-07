@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     DEEPSEEK_API_KEY: str = ""
     OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_ENABLED: bool = False  # set true only when a reachable Ollama server is configured
     AI_REQUEST_TIMEOUT: int = 60  # seconds; prevents worker tasks hanging on a stalled AI call
 
     # --- Embeddings / RAG ---
