@@ -284,3 +284,11 @@ export interface Stimulus {
   created_at: string;
   updated_at: string;
 }
+
+export interface AIModel {
+  id: string;
+  provider: string;
+  context_window: number;
+  supports_vision?: boolean;
+  key_configured: boolean;
+}

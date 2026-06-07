@@ -73,50 +73,103 @@ class AIOrchestrationService:
         provider: str | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """Run a completion and return content plus usage/cost/latency metadata."""
+        """Run a completion and return content plus usage/cost/latency metadata.
+
+        Includes retry logic with exponential backoff and a simple in-memory
+        circuit-breaker per provider.
+        """
         model_string = self._build_model_string(model, provider)
         effective_provider = provider or settings.LITELLM_DEFAULT_PROVIDER
-        start_ms = int(time.time() * 1000)
         kwargs.setdefault("timeout", settings.AI_REQUEST_TIMEOUT)
-        try:
-            response = await litellm.acompletion(
-                model=model_string,
-                messages=messages,
-                **kwargs,
-            )
-            elapsed_ms = int(time.time() * 1000) - start_ms
-            content = response.choices[0].message.content or ""
-            usage = response.usage or {}
-            prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
-            completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
 
-            # Real cost from LiteLLM's pricing tables when available.
-            cost_usd = 0.0
+        # Circuit-breaker check
+        with _circuit_lock:
+            failures = _provider_failures.get(effective_provider, 0)
+        if failures >= _CIRCUIT_OPEN_THRESHOLD:
+            raise RuntimeError(
+                f"Circuit open for provider {effective_provider} — too many failures"
+            )
+
+        _retryable = (
+            litellm.exceptions.RateLimitError,
+            litellm.exceptions.ServiceUnavailableError,
+            litellm.exceptions.Timeout,
+            asyncio.TimeoutError,
+        )
+
+        last_exc: Exception | None = None
+        for attempt in range(MAX_RETRIES + 1):
+            start_ms = int(time.time() * 1000)
             try:
-                cost_usd = float(litellm.completion_cost(completion_response=response) or 0.0)
-            except Exception:
-                cost_usd = 0.0
+                response = await litellm.acompletion(
+                    model=model_string,
+                    messages=messages,
+                    **kwargs,
+                )
+                elapsed_ms = int(time.time() * 1000) - start_ms
+                content = response.choices[0].message.content or ""
+                usage = response.usage or {}
+                prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+                completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
 
-            logger.info(
-                "ai_completion",
-                model=model_string,
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
-                cost_usd=cost_usd,
-                latency_ms=elapsed_ms,
-            )
-            return {
-                "content": content,
-                "model": model_string,
-                "provider": effective_provider,
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-                "cost_usd": cost_usd,
-                "latency_ms": elapsed_ms,
-            }
-        except Exception as exc:
-            logger.error("ai_completion_failed", model=model_string, error=str(exc))
-            raise
+                cost_usd = 0.0
+                try:
+                    cost_usd = float(litellm.completion_cost(completion_response=response) or 0.0)
+                except Exception:
+                    cost_usd = 0.0
+
+                # Reset circuit-breaker on success
+                with _circuit_lock:
+                    _provider_failures[effective_provider] = 0
+
+                logger.info(
+                    "ai_completion",
+                    model=model_string,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    cost_usd=cost_usd,
+                    latency_ms=elapsed_ms,
+                )
+                return {
+                    "content": content,
+                    "model": model_string,
+                    "provider": effective_provider,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "cost_usd": cost_usd,
+                    "latency_ms": elapsed_ms,
+                }
+
+            except litellm.exceptions.AuthenticationError as exc:
+                # Bad key — retrying will never help
+                logger.error("ai_completion_auth_error", model=model_string, error=str(exc))
+                with _circuit_lock:
+                    _provider_failures[effective_provider] = (
+                        _provider_failures.get(effective_provider, 0) + 1
+                    )
+                raise
+
+            except Exception as exc:
+                last_exc = exc
+                with _circuit_lock:
+                    _provider_failures[effective_provider] = (
+                        _provider_failures.get(effective_provider, 0) + 1
+                    )
+
+                if attempt < MAX_RETRIES:
+                    delay = RETRY_DELAYS[attempt]
+                    logger.warning(
+                        "ai_completion_retry",
+                        attempt=attempt + 1,
+                        model=model_string,
+                        delay_s=delay,
+                        error=str(exc),
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error("ai_completion_failed", model=model_string, error=str(exc))
+
+        raise last_exc  # type: ignore[misc]
 
     async def complete_with_fallback(
         self,
