@@ -25,6 +25,7 @@ class GenerationJobRead(BaseModel):
     id: uuid.UUID
     status: JobStatus
     configuration_id: uuid.UUID | None
+    stimulus_id: uuid.UUID | None = None
     knowledge_asset_ids: list
     ai_provider: str
     ai_model: str

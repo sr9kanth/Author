@@ -27,6 +27,7 @@ class GenerationService:
     async def create_job(self, data: GenerationJobCreate, created_by: str) -> GenerationJobRead:
         job = GenerationJob(
             configuration_id=data.configuration_id,
+            stimulus_id=data.stimulus_id,
             knowledge_asset_ids=data.knowledge_asset_ids,
             ai_provider=data.ai_provider or settings.LITELLM_DEFAULT_PROVIDER,
             ai_model=data.ai_model or settings.LITELLM_DEFAULT_MODEL,

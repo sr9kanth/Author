@@ -44,6 +44,7 @@ class GenerationJob(Base):
     completed_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     configuration = relationship("AssessmentConfiguration", foreign_keys=[configuration_id])
+    stimulus = relationship("Stimulus", foreign_keys=[stimulus_id])
     creator = relationship("User", foreign_keys=[created_by])
     contents: Mapped[list["GeneratedContent"]] = relationship("GeneratedContent", back_populates="job", cascade="all, delete-orphan")
 

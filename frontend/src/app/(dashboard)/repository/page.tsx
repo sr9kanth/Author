@@ -164,9 +164,10 @@ export default function RepositoryPage() {
   const [query, setQuery] = useState("");
   const [bloom, setBloom] = useState("all");
   const [view, setView] = useState<"grid" | "list">("grid");
+  const [showImport, setShowImport] = useState(false);
   const panel = useDetailPanel<RepoRow>();
 
-  const { data, loading, error } = useAsync(() => repositoryApi.list(0, 100), []);
+  const { data, loading, error, reload } = useAsync(() => repositoryApi.list(0, 100), []);
 
   const repository: RepoRow[] = useMemo(
     () =>
@@ -223,10 +224,17 @@ export default function RepositoryPage() {
 
   return (
     <div>
+      {showImport && (
+        <ImportModal
+          onClose={() => setShowImport(false)}
+          onDone={() => { setShowImport(false); reload(); }}
+        />
+      )}
       <PageHeader
         title="Repository"
         description="Your approved, reusable assessment items. Search and filter the bank, then send items to Assembly."
       >
+        <Button variant="secondary" Icon={Upload} onClick={() => setShowImport(true)}>Import</Button>
         <Button variant="secondary" Icon={Download} onClick={exportCsv} disabled={rows.length === 0}>Export</Button>
         <Button Icon={Package} onClick={() => router.push("/assembly")}>Build package</Button>
       </PageHeader>

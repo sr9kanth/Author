@@ -7,9 +7,9 @@ import { PageHeader, EmptyState, Segmented } from "@/components/ui/index";
 import { StatusBadge, Tag } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { generationApi, workflowApi, repositoryApi } from "@/lib/api";
+import { generationApi, workflowApi, repositoryApi, metadataApi } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
-import type { GeneratedContent } from "@/types";
+import type { GeneratedContent, MetadataDimension } from "@/types";
 import { Download, Pencil, X, Check, AlertCircle, BookOpen, Target, ClipboardCheck } from "lucide-react";
 
 interface ReviewItem {
@@ -79,6 +79,11 @@ function ReviewPageInner() {
   const { data, loading, error, reload } = useAsync(
     () => (jobId ? generationApi.listContents(jobId) : Promise.resolve(null)),
     [jobId],
+  );
+
+  const { data: metaDimensionsData } = useAsync(() => metadataApi.list(), []);
+  const metaDimensions: MetadataDimension[] = (metaDimensionsData?.items ?? []).filter(
+    (d) => d.is_active && (d.scopes ?? []).includes("question"),
   );
 
   const fetched = useMemo(() => (data?.items ?? []).map(toReviewItem), [data]);
@@ -359,6 +364,25 @@ function ReviewPageInner() {
                 </div>
                 <p className="text-[13.5px] text-stone-700 dark:text-stone-300 leading-relaxed">{active.rationale}</p>
               </div>
+
+              {metaDimensions.length > 0 && (
+                <div className="rounded-xl border border-stone-200 dark:border-white/[0.07] p-4 mb-6">
+                  <div className="text-[12px] font-medium uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-3">
+                    Metadata
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {metaDimensions.map((dim) => (
+                      <span
+                        key={dim.id}
+                        className="inline-flex items-center gap-1.5 text-[12px] px-2.5 py-1 rounded-lg border border-stone-200 dark:border-white/[0.08] bg-stone-50 dark:bg-white/[0.03] text-stone-600 dark:text-stone-300"
+                      >
+                        <span className="font-medium text-stone-400 dark:text-stone-500">{dim.name}:</span>
+                        <span className="text-stone-400 dark:text-stone-600 italic">—</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {active.flags > 0 && (
                 <div className="rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-4">

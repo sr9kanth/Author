@@ -248,6 +248,17 @@ def run_generation_job(self, job_id: str) -> dict:
                 if not knowledge_text:
                     knowledge_text = "No source material provided. Generate plausible assessment questions based on the framework and configuration."
 
+                # --- Prepend stimulus body if the job has one ---
+                if job.stimulus_id:
+                    from app.modules.generation.models import Stimulus
+                    stim_result = await db.execute(
+                        select(Stimulus).where(Stimulus.id == job.stimulus_id)
+                    )
+                    stim = stim_result.scalar_one_or_none()
+                    if stim:
+                        stimulus_prefix = f"[STIMULUS]\n{stim.body}\n\nGenerate questions that are directly grounded in this scenario."
+                        knowledge_text = stimulus_prefix + "\n\n" + knowledge_text
+
                 # --- Build framework context string ---
                 framework_context = ""
                 if config and config.framework_id:
@@ -299,6 +310,7 @@ def run_generation_job(self, job_id: str) -> dict:
                     for q in agent_result.data.get("questions", []):
                         content = GeneratedContent(
                             job_id=job.id,
+                            stimulus_id=job.stimulus_id,
                             content_type=q.get("question_type", "multiple_choice"),
                             body=q.get("stem", ""),
                             content_metadata=q,
