@@ -8,13 +8,14 @@ import { cn } from "@/lib/utils";
 import { knowledgeApi } from "@/lib/api";
 import {
   LayoutDashboard, Layers, Database, Sparkles, ClipboardCheck,
-  Library, Package, LogOut, CheckSquare, Settings, Tag,
+  Library, Package, LogOut, CheckSquare, Settings, Tag, BookOpen,
 } from "lucide-react";
 
 const NAV = [
   { key: "dashboard", label: "Dashboard", href: "/dashboard", Icon: LayoutDashboard, section: "Overview" },
   { key: "frameworks", label: "Frameworks", href: "/frameworks", Icon: Layers, section: "Content" },
   { key: "knowledge", label: "Knowledge", href: "/knowledge", Icon: Database, section: "Content" },
+  { key: "stimuli", label: "Stimuli", href: "/stimuli", Icon: BookOpen, section: "Content" },
   { key: "generate", label: "Generate", href: "/generate", Icon: Sparkles, section: "Content", badge: "AI" },
   { key: "review", label: "Review", href: "/review", Icon: ClipboardCheck, section: "Quality", count: 5 },
   { key: "repository", label: "Repository", href: "/repository", Icon: Library, section: "Quality" },

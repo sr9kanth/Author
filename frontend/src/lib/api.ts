@@ -14,6 +14,7 @@ import type {
   MetadataDimension,
   PaginatedList,
   ReviewComment,
+  Stimulus,
   User,
   ValidationResult,
   WorkflowEvent,
@@ -195,6 +196,7 @@ export const generationApi = {
     knowledge_asset_ids?: string[];
     ai_provider?: string;
     ai_model?: string;
+    stimulus_id?: string;
   }) =>
     request<GenerationJob>("/generation/jobs", { method: "POST", body: JSON.stringify(data) }),
   listContents: (jobId: string) =>
@@ -287,6 +289,15 @@ export const assemblyApi = {
     export_formats?: string[];
     package_metadata?: Record<string, unknown>;
   }) => request<AssessmentPackage>("/assembly", { method: "POST", body: JSON.stringify(data) }),
+};
+
+// ---- Stimuli ----
+export const stimuliApi = {
+  list: () => request<Stimulus[]>("/stimuli"),
+  get: (id: string) => request<Stimulus>(`/stimuli/${id}`),
+  create: (data: { title: string; body: string; stimulus_type?: string }) =>
+    request<Stimulus>("/stimuli", { method: "POST", body: JSON.stringify(data) }),
+  delete: (id: string) => request<void>(`/stimuli/${id}`, { method: "DELETE" }),
 };
 
 // ---- Quality ----
