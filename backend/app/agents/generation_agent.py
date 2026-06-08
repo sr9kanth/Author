@@ -23,6 +23,12 @@ def _parse_questions(raw: str) -> list[dict]:
     if fence:
         text = fence.group(1).strip()
 
+    def _sanitize(s: str) -> str:
+        # Replace literal control characters inside JSON strings with their
+        # escaped equivalents so json.loads doesn't reject them. Only touches
+        # chars that are valid JSON escape sequences.
+        return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', lambda m: repr(m.group())[1:-1], s)
+
     def _coerce(parsed: Any) -> list[dict]:
         if isinstance(parsed, list):
             return parsed
@@ -30,20 +36,27 @@ def _parse_questions(raw: str) -> list[dict]:
             return parsed["questions"]
         raise ValueError("Parsed JSON is not a list of questions")
 
-    try:
-        return _coerce(json.loads(text))
-    except (json.JSONDecodeError, ValueError):
-        pass
+    for attempt in (text, _sanitize(text)):
+        try:
+            return _coerce(json.loads(attempt))
+        except (json.JSONDecodeError, ValueError):
+            pass
 
     # Fall back to the widest [...] span.
-    start, end = text.find("["), text.rfind("]")
-    if start != -1 and end != -1 and end > start:
-        return _coerce(json.loads(text[start:end + 1]))
+    for candidate in (text, _sanitize(text)):
+        start, end = candidate.find("["), candidate.rfind("]")
+        if start != -1 and end != -1 and end > start:
+            try:
+                return _coerce(json.loads(candidate[start:end + 1]))
+            except (json.JSONDecodeError, ValueError):
+                pass
 
-    # Or a single {...} object span.
-    start, end = text.find("{"), text.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        return _coerce(json.loads(text[start:end + 1]))
+        start, end = candidate.find("{"), candidate.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            try:
+                return _coerce(json.loads(candidate[start:end + 1]))
+            except (json.JSONDecodeError, ValueError):
+                pass
 
     raise json.JSONDecodeError("No JSON array/object found in response", text, 0)
 
