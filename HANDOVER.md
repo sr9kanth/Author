@@ -1,74 +1,67 @@
 # AIP — Assessment Intelligence Platform: Handover Document
 
-> **For Claude Code on the web**: Start a session at https://code.claude.com, connect the `sr9kanth/Author` repository, and open this file first. The active branch is `claude/amazing-turing-8hAH3`. All commands below assume the repo root unless stated otherwise.
+> **For Claude Code on the web**: Start a session at https://code.claude.com, connect the
+> `sr9kanth/Author` repository, and open this file first. The active branch is
+> `claude/amazing-turing-8hAH3`. All commands below assume the repo root unless stated otherwise.
 
 ---
 
-## Live URLs
+## Current State (June 2026)
+
+The platform is **fully operational locally via Docker Compose**. All core features are
+working end-to-end: auth, knowledge ingestion, AI generation, review workflow, repository,
+stimuli, metadata dimensions, settings/LLM key management, and the dashboard.
+
+Run it with:
+
+```bash
+cp .env.example .env   # then add your API key(s)
+docker compose up --build
+```
 
 | Service | URL |
 |---------|-----|
-| Frontend | https://writer-two-iota.vercel.app |
-| Backend API | https://author-production.up.railway.app |
-| API Docs (Swagger) | https://author-production.up.railway.app/docs |
-
-**Repository**: `sr9kanth/Author`  
-**Active branch**: `claude/amazing-turing-8hAH3`
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8000 |
+| API Docs (Swagger) | http://localhost:8000/docs |
+| MinIO console | http://localhost:9001 (minioadmin / minioadmin) |
 
 ---
 
-## Deployment Status (as of 2026-06-04)
+## Architecture Overview
 
-**The live deployment is working: auth, DB, and the UI are all up.**
+```
+┌──────────────────────────────────────────────────────────┐
+│                    Next.js 14 Frontend                   │
+│  Dashboard │ Knowledge │ Frameworks │ Generate │ Review  │
+│  Repository │ Stimuli │ Metadata │ Settings              │
+└──────────────────────┬───────────────────────────────────┘
+                       │ /api/proxy/* (same-origin Route Handler)
+┌──────────────────────▼───────────────────────────────────┐
+│                   FastAPI Backend                        │
+│  auth │ knowledge │ frameworks │ generation │ quality    │
+│  workflow │ repository │ stimuli │ metadata │ settings   │
+│  orchestration │ assembly                               │
+└──────────┬────────────────────────────┬─────────────────┘
+           │ SQLAlchemy 2.0 async        │ LiteLLM
+┌──────────▼──────────┐       ┌─────────▼───────────────────┐
+│  PostgreSQL 16       │       │  Claude / OpenAI / Gemini /  │
+│  + pgvector          │       │  DeepSeek / Ollama           │
+└─────────────────────┘       └─────────────────────────────┘
+           │ Celery tasks
+┌──────────▼──────────┐       ┌─────────────────────────────┐
+│  Redis 7             │       │  MinIO (S3-compatible)       │
+└─────────────────────┘       └─────────────────────────────┘
+```
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Frontend (Vercel) | ✅ Live & styled | Tailwind/postcss fixed earlier |
-| Backend (Railway) | ✅ Live | All startup crashes resolved |
-| PostgreSQL (Railway) | ✅ Connected | `DATABASE_URL = ${{Postgres.DATABASE_URL}}` set on backend |
-| Migrations | ✅ Applied on boot | `start.sh` runs `alembic upgrade head` |
-| Admin user | ✅ Created | `sr9kanth@gmail.com` (administrator), login verified |
-| Redis / Celery worker | ⛔ **Not set up** | Railway usage expired — see options below |
-| S3 file storage | ⚠️ Vars set, untested | AWS creds on backend; upload flow not yet exercised |
+**Key networking detail**: The frontend never calls the backend cross-origin in production.
+All API calls go through the same-origin proxy Route Handler at
+`frontend/src/app/api/proxy/[...path]/route.ts`. This handler reads `BACKEND_URL` at
+**request time** (not at Next.js build time), so the backend URL can be changed without
+rebuilding the frontend image.
 
-### Fixes landed this session (all on `claude/amazing-turing-8hAH3`)
-| Commit | Fix |
-|--------|-----|
-| `fa04eb2` | Rewrite `postgres://` → `postgresql+asyncpg://` for Railway |
-| `4e6075f` | CORS: hardcode Vercel origin so OPTIONS preflights pass |
-| `f8ab24c` | Lazy-import Celery task so the web app starts without Redis |
-| `d2ecefe` | Parse `CORS_ORIGINS` as a raw string (was crashing pydantic JSON decode at startup) |
-| `12bdc35` | Run `alembic upgrade head` on boot; alembic defaults to app `DATABASE_URL` |
-| `32971fa` | Pin `bcrypt==4.0.1` + truncate passwords to 72 bytes (passlib 1.7.4 compat) |
-
-### What's blocked & why
-**Redis + Celery worker** can't be added on Railway because the account's usage/trial expired.
-Background jobs (knowledge extraction, question generation, quality validation) need a broker
-+ worker. Two ways forward — see **"Background jobs without Railway Redis"** and
-**"Fully Local Setup"** below. **Recommendation: run the whole stack locally** (next section) —
-it sidesteps usage limits entirely, keeps data private, and lets the M1 Max run a local LLM.
-
----
-
-## What this project is
-
-AIP is a full-stack AI-native platform for creating, managing, validating, and assembling assessment content (exam questions, competency frameworks, learning outcomes). Built for organisations that need structured, auditable, AI-assisted assessment authoring.
-
----
-
-## Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Backend | Python 3.11, FastAPI 0.115, SQLAlchemy 2.0 async |
-| Database | PostgreSQL + pgvector (via Railway) |
-| Task queue | Celery 5.4 + Redis (via Railway) |
-| AI | LiteLLM — DeepSeek by default, supports OpenAI, Anthropic, Gemini, Ollama |
-| Auth | JWT (python-jose) + bcrypt (passlib) |
-| File storage | AWS S3 / MinIO (boto3) |
-| Frontend | Next.js 14, TypeScript, Tailwind CSS, Lucide icons |
-| Backend deploy | Railway (Dockerfile build from repo root) |
-| Frontend deploy | Vercel (root directory: `frontend/`) |
+**Migrations**: `backend/start.sh` runs `alembic upgrade head` on every boot. Migrations
+`0001`–`0007` are all idempotent-guarded. Never need to run them manually in normal usage.
 
 ---
 
@@ -78,95 +71,143 @@ AIP is a full-stack AI-native platform for creating, managing, validating, and a
 Author/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py                   # FastAPI app, CORS, router registration, /health
+│   │   ├── main.py                        # FastAPI app, CORS, router registration, /health
 │   │   ├── core/
-│   │   │   ├── config.py             # All env vars (Pydantic Settings)
-│   │   │   ├── database.py           # Async SQLAlchemy engine + init_db()
-│   │   │   └── deps.py               # FastAPI dependency injection (get_db, get_current_user)
+│   │   │   ├── config.py                  # All env vars (Pydantic Settings)
+│   │   │   ├── database.py                # Async SQLAlchemy engine
+│   │   │   └── deps.py                    # FastAPI DI (get_db, get_current_user)
 │   │   ├── modules/
-│   │   │   ├── auth/                 # Users, JWT login/register/refresh
-│   │   │   ├── knowledge/            # Knowledge asset upload + AI extraction
-│   │   │   ├── frameworks/           # Competency frameworks, domains, skills, outcomes
-│   │   │   ├── assessment_config/    # Assessment configuration templates
-│   │   │   ├── generation/           # AI generation jobs + generated content
-│   │   │   ├── quality/              # Quality validation engine
-│   │   │   ├── workflow/             # Review workflow state machine
-│   │   │   ├── repository/           # Approved item repository
-│   │   │   ├── assembly/             # Assessment package assembly
-│   │   │   └── orchestration/        # LiteLLM multi-provider AI service + usage logs
+│   │   │   ├── auth/                      # Users, JWT login/register/refresh
+│   │   │   ├── knowledge/                 # Document upload + AI extraction
+│   │   │   ├── frameworks/                # Competency frameworks + Item Authoring Guides
+│   │   │   ├── generation/                # AI generation jobs + generated content
+│   │   │   ├── quality/                   # Quality validation engine
+│   │   │   ├── workflow/                  # Review state machine
+│   │   │   ├── repository/                # Approved item repository + CSV import
+│   │   │   ├── stimuli/                   # Shared passages / case studies
+│   │   │   ├── metadata/                  # Custom metadata dimension admin
+│   │   │   ├── settings/                  # App settings + encrypted LLM API keys
+│   │   │   ├── assembly/                  # Assessment package assembly
+│   │   │   └── orchestration/             # LiteLLM multi-provider AI service + usage logs
 │   │   ├── agents/
-│   │   │   └── assessment_agent.py   # AssessmentAgent: generates questions via LiteLLM
+│   │   │   └── assessment_agent.py        # Generates questions via LiteLLM
 │   │   └── workers/
-│   │       ├── celery_app.py         # Celery configuration
-│   │       └── tasks.py              # 3 Celery tasks (see below)
-│   ├── alembic/                      # Migration framework (versions/ is currently empty)
-│   ├── tests/
-│   ├── Dockerfile                    # python:3.11-slim, copies backend/, runs start.sh
-│   ├── start.sh                      # exec uvicorn app.main:app --port "${PORT:-8000}"
+│   │       ├── celery_app.py              # Celery configuration
+│   │       └── tasks.py                   # Celery tasks (knowledge, generation, quality)
+│   ├── alembic/
+│   │   └── versions/                      # Migrations 0001–0007
+│   ├── start.sh                           # Runs alembic upgrade head then uvicorn
 │   └── requirements.txt
 │
 ├── frontend/
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── (auth)/login/         # /login — public
-│   │   │   └── (dashboard)/          # Protected route group
-│   │   │       ├── layout.tsx        # Sidebar + Topbar layout
-│   │   │       ├── dashboard/        # /dashboard — stats, chart, activity, review queue
-│   │   │       ├── frameworks/       # /frameworks — sortable table with search/filter
-│   │   │       ├── knowledge/        # /knowledge — upload zone + asset list
-│   │   │       ├── generate/         # /generate — job config form + progress
-│   │   │       ├── review/           # /review — split-panel review UI
-│   │   │       ├── repository/       # /repository — item bank with grid/list toggle
-│   │   │       ├── assembly/         # /assembly — drag-and-drop package builder
-│   │   │       └── configurations/   # /configurations
-│   │   ├── components/
-│   │   │   ├── ui/
-│   │   │   │   ├── button.tsx        # Button variants: primary/secondary/ghost/danger
-│   │   │   │   ├── badge.tsx         # StatusBadge (5 content statuses) + Tag
-│   │   │   │   ├── card.tsx          # CARD constant (use as className)
-│   │   │   │   ├── input.tsx         # Input + INPUT_CLS constant
-│   │   │   │   └── index.tsx         # StatsCard, PageHeader, EmptyState, SearchInput, Segmented, FileUploadZone
-│   │   │   ├── layout/
-│   │   │   │   ├── sidebar.tsx       # Dark #0C0C0F sidebar, section groups, storage meter
-│   │   │   │   └── topbar.tsx        # Sticky topbar, breadcrumb, search, dark mode toggle
-│   │   │   └── features/
-│   │   │       ├── knowledge/upload-form.tsx
-│   │   │       ├── generation/generation-form.tsx
-│   │   │       └── review/review-panel.tsx
-│   │   ├── lib/
-│   │   │   ├── api.ts                # Axios client pointing at NEXT_PUBLIC_API_URL
-│   │   │   ├── auth.ts               # Token storage, login/logout helpers
-│   │   │   └── utils.ts
-│   │   └── types/index.ts            # All TypeScript interfaces
-│   ├── next.config.mjs               # output: standalone, /api/proxy/* rewrite
-│   ├── vercel.json                   # Security headers
-│   └── package.json
+│   └── src/
+│       ├── app/
+│       │   ├── api/proxy/[...path]/
+│       │   │   └── route.ts               # Runtime proxy — reads BACKEND_URL per-request
+│       │   ├── (auth)/login/              # Public login page
+│       │   └── (dashboard)/              # Protected route group
+│       │       ├── layout.tsx             # Sidebar + Topbar layout
+│       │       ├── dashboard/             # Stats cards + activity feed
+│       │       ├── knowledge/             # Upload zone + asset list + auto-poll
+│       │       ├── frameworks/            # Framework CRUD + Item Authoring Guides UI
+│       │       ├── generate/              # Generation job form + progress polling
+│       │       ├── review/                # Split-panel review UI
+│       │       ├── repository/            # Item bank + CSV import
+│       │       ├── stimuli/               # Stimuli CRUD page
+│       │       ├── metadata/              # Metadata dimension admin
+│       │       └── settings/              # API key management
+│       ├── components/
+│       │   ├── ui/                        # Design system primitives
+│       │   ├── layout/
+│       │   │   ├── sidebar.tsx            # Dark sidebar + real storage usage meter
+│       │   │   └── topbar.tsx             # Sticky topbar, breadcrumb, dark mode toggle
+│       │   └── features/                  # Feature-specific components
+│       └── lib/
+│           ├── api.ts                     # Axios client
+│           ├── auth.ts                    # Token storage, login/logout helpers
+│           └── utils.ts
 │
-├── railway.json                      # Railway build config → backend/Dockerfile
-├── railway.toml                      # Same (Railway reads both)
-├── vercel.json                       # Root vercel.json for monorepo (frontend only)
-└── docker-compose.yml                # Local full-stack dev (postgres, redis, backend, frontend)
+├── docker-compose.yml                     # Full local stack
+├── .env.example                           # Environment variable template
+└── scripts/create-admin.sh               # Helper to POST an admin user
 ```
 
 ---
 
-## Design System
+## Feature Inventory
 
-The frontend uses a warm Notion-ish SaaS design system:
+### Auth
+- JWT login / register / refresh with bcrypt password hashing
+- User roles: `administrator`, `assessment_manager`, `author`, `reviewer`, `auditor`, `read_only`
+- Refresh token stored in `localStorage`; access token attached to every request
 
-- **Paper surface**: `bg-[var(--paper)]` — `#fafaf9` light / `#141316` dark
-- **Sidebar**: `#0C0C0F` (always dark)
-- **Brand**: indigo (`#6366f1`) with violet accents
-- **Cards**: `CARD` constant from `components/ui/card.tsx`
-- **Dark mode**: Tailwind `class` strategy — toggled by `document.documentElement.classList.toggle("dark")`
-- **Icons**: Lucide React throughout
+### Knowledge Base
+- Upload documents: PDF, DOCX, PPTX, CSV, Markdown, HTML, plain text, URL
+- Celery worker (`process_knowledge_asset` task) extracts topics, concepts, learning
+  outcomes, and keywords via AI
+- pgvector RAG pipeline with 3-tier retrieval degradation:
+  1. Vector similarity search (requires embedding key)
+  2. Full-text keyword search
+  3. Returns all assets as fallback
+- Knowledge page auto-polls while assets are in `processing` state
+- Sidebar shows real storage usage (fetches actual `file_size` totals from the backend)
 
-**StatusBadge taxonomy** (in `badge.tsx`):
-- `draft` → stone, `generated` → violet, `validated` → amber, `approved` → emerald, `published` → sky, `archived` → slate
+### Frameworks
+- CRUD for competency frameworks (Framework → Domain → Competency → Skill → LearningOutcome)
+- **Item Authoring Guides** per framework — free-text writing guidance injected into every
+  generation system prompt when that framework is selected
+- Guides UI on the frameworks page: add / toggle active / delete
+
+### Generation
+- Create a generation job with inline params — no pre-created `AssessmentConfiguration`
+  required:
+  - `framework_id`, `question_count`, `question_types`, `difficulty_levels`,
+    `cognitive_levels`, `reading_level`, `instructions`
+- **Knowledge source picker**: select which indexed documents ground the questions
+- **Stimulus / scenario picker**: link a shared passage or case study to the job; all
+  generated questions reference it
+- **AI model selector**: only models with a configured API key are shown as active; others
+  are greyed out
+- Framework alignment and Item Authoring Guide baked into the generation system prompt
+- Real progress polling with 3-minute timeout; error reason surfaced to the UI on failure
+- Reliability: weighted quality scoring, LLM validators, circuit breaker, 3-attempt
+  exponential-backoff retry logic
+- JSON fence stripping + control character sanitization on all AI responses
+
+### Review
+- Split-panel UI: question list on the left, question detail on the right
+- Status filters: All / New / Validated / Done
+- Stimulus callout shown above any question linked to a stimulus
+- Approve / reject per question via `PATCH /generation/contents/{id}`
+
+### Repository
+- Approved items list with Bloom's taxonomy level and difficulty metadata visible
+- **CSV question bank import** with in-browser template download
+
+### Stimuli
+- Full CRUD for scenario / passage / case-study stimuli (`/stimuli` endpoints)
+- Link a stimulus to a generation job so all questions reference it
+- Dedicated Stimuli page + sidebar navigation entry
+
+### Metadata Dimensions
+- Admin configurator for custom question metadata dimensions
+- Field types: single-select, multi-select, text, number
+- Scope toggles (applies to question / stimulus), required flag, allowed values list
+- Rendered in the review panel alongside each question
+
+### Settings / LLM Keys
+- Settings page with API key management
+- Keys are Fernet-encrypted at rest in the `app_settings` database table
+- Only models whose provider has a stored key are shown as active in the generation model
+  selector; others are greyed out
+
+### Dashboard
+- Stats cards: active frameworks, items generated, awaiting review, approval rate
+- Activity feed of recent events
 
 ---
 
-## Backend Modules & API Endpoints
+## API Endpoints Summary
 
 ### Auth — `/api/v1/auth`
 | Method | Path | Description |
@@ -176,10 +217,6 @@ The frontend uses a warm Notion-ish SaaS design system:
 | POST | `/refresh` | Exchange refresh token for new access token |
 | GET | `/me` | Get current user profile |
 | PATCH | `/me` | Update profile |
-
-**User roles**: `administrator`, `assessment_manager`, `author`, `reviewer`, `auditor`, `read_only`
-
----
 
 ### Knowledge — `/api/v1/knowledge`
 | Method | Path | Description |
@@ -191,375 +228,223 @@ The frontend uses a warm Notion-ish SaaS design system:
 | PATCH | `/{asset_id}` | Update title/description/status |
 | DELETE | `/{asset_id}` | Delete asset |
 
-**Content types**: pdf, docx, pptx, xlsx, csv, html, url, markdown, text  
-**Statuses**: uploaded → processing → processed / failed
-
----
-
 ### Frameworks — `/api/v1/frameworks`
-Hierarchical: Framework → Domain → Competency → Skill → LearningOutcome
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/` | Create framework |
-| GET | `/` | List frameworks (paginated) |
-| GET | `/{framework_id}` | Get framework |
-| DELETE | `/{framework_id}` | Delete framework |
-
----
-
-### Assessment Config — `/api/v1/configurations`
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/` | Create configuration |
-| GET | `/` | List configurations |
-| GET | `/{config_id}` | Get configuration |
-| PATCH | `/{config_id}` | Update configuration |
-| DELETE | `/{config_id}` | Delete configuration |
-
-Configuration parameters: question_types, difficulty_levels, cognitive_levels, question_count, reading_level, language, audience, jurisdiction, duration_minutes, framework_id
-
----
+Hierarchical: Framework → Domain → Competency → Skill → LearningOutcome  
+Includes sub-routes for Item Authoring Guides (`/frameworks/{id}/guides`).
 
 ### Generation — `/api/v1/generation`
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/jobs` | Create generation job → triggers `run_generation_job` Celery task |
-| GET | `/jobs` | List jobs (paginated) |
+| GET | `/jobs` | List jobs |
 | GET | `/jobs/{job_id}` | Get job + status |
 | GET | `/jobs/{job_id}/contents` | List generated content for job |
-| PATCH | `/contents/{content_id}` | Update content body/status |
+| PATCH | `/contents/{content_id}` | Approve / reject / edit content |
 
-**Job statuses**: pending → running → completed / failed  
-**Content statuses**: draft → generated → validated → under_review → approved → published → archived
-
----
-
-### Quality — `/api/v1/quality`
+### Stimuli — `/api/v1/stimuli`
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/validate` | Queue validation → triggers `run_quality_validation` Celery task |
-| GET | `/content/{content_id}` | Get validation results for content |
+| POST | `/` | Create stimulus |
+| GET | `/` | List stimuli |
+| GET | `/{stimulus_id}` | Get stimulus |
+| PATCH | `/{stimulus_id}` | Update stimulus |
+| DELETE | `/{stimulus_id}` | Delete stimulus |
 
----
-
-### Workflow — `/api/v1/workflow`
+### Metadata — `/api/v1/metadata`
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/content/{content_id}` | Get workflow state for content |
-| POST | `/content/{content_id}/transition` | Transition state (with validation) |
-| GET | `/content/{content_id}/events` | Get audit trail of transitions |
-| POST | `/content/{content_id}/comments` | Add review comment |
+| POST | `/dimensions` | Create dimension |
+| GET | `/dimensions` | List dimensions |
+| PATCH | `/dimensions/{id}` | Update dimension |
+| DELETE | `/dimensions/{id}` | Delete dimension |
 
-**State machine**: draft → generated → validated → under_review → approved → published → archived  
-Any state can fall back to draft.
-
----
+### Settings — `/api/v1/settings`
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | List all settings (keys redacted) |
+| PUT | `/{key}` | Set a setting value (e.g. an API key) |
+| DELETE | `/{key}` | Remove a setting value |
 
 ### Repository — `/api/v1/repository`
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/` | Promote content to repository |
-| GET | `/` | List repository items (paginated) |
+| GET | `/` | List repository items |
 | GET | `/{item_id}` | Get repository item |
-
----
-
-### Assembly — `/api/v1/assembly`
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/` | Create assessment package |
-| GET | `/` | List packages (paginated) |
-| GET | `/{package_id}` | Get package |
-| PATCH | `/{package_id}` | Update package |
-
----
+| POST | `/import` | CSV import of question bank items |
 
 ### Orchestration — `/api/v1/orchestration`
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/models` | List available LLM providers and models |
-| POST | `/complete` | Direct AI completion (used internally by agents) |
+| GET | `/models` | List available LLM providers/models (active vs greyed) |
 
 ---
 
 ## Celery Tasks
 
-All tasks in `backend/app/workers/tasks.py`. Each creates its own async DB session internally.
+All tasks live in `backend/app/workers/tasks.py`.
 
-| Task name | Triggered by | What it does |
-|-----------|-------------|--------------|
-| `tasks.process_knowledge_asset` | File upload endpoint | Downloads from S3, extracts text, runs AI analysis, updates asset topics/concepts/outcomes/keywords |
-| `tasks.run_generation_job` | Generation job create | Loads context, calls `AssessmentAgent`, persists `GeneratedContent` records |
-| `tasks.run_quality_validation` | Quality validate endpoint | Runs validator suite against content, stores `QualityValidation` record, updates `validation_score` |
-
----
-
-## AI / LiteLLM Setup
-
-Provider routing is in `backend/app/modules/orchestration/service.py`.
-
-**Default**: DeepSeek (`deepseek-chat`)  
-**Supported**: deepseek, anthropic, openai, gemini, ollama  
-
-Model IDs must be prefixed for LiteLLM: `deepseek/deepseek-chat`, `anthropic/claude-opus-4-8`, etc.
-
-The `AssessmentAgent` in `backend/app/agents/assessment_agent.py` handles generation. It takes a context dict and returns structured question JSON.
+| Task | Triggered by | What it does |
+|------|-------------|--------------|
+| `process_knowledge_asset` | File upload | Downloads from S3, extracts text, runs AI analysis, updates asset topics/concepts/outcomes/keywords, generates pgvector embeddings |
+| `run_generation_job` | Generation job create | Loads framework + knowledge context + stimulus, calls `AssessmentAgent`, persists `GeneratedContent` records |
+| `run_quality_validation` | Quality validate endpoint | Runs 10 validator classes (grammar, bias, ambiguity, hallucination, etc.), stores `QualityValidation` record |
 
 ---
 
 ## Environment Variables
 
-### Railway (backend service → Variables tab)
+All variables are declared in `backend/app/core/config.py` (Pydantic Settings).
 
-| Variable | Value |
-|----------|-------|
-| `DATABASE_URL` | Auto-set by Railway Postgres plugin |
-| `REDIS_URL` | Auto-set by Railway Redis plugin |
-| `SECRET_KEY` | Generate: `python -c "import secrets; print(secrets.token_hex(32))"` |
-| `DEEPSEEK_API_KEY` | From platform.deepseek.com |
-| `CORS_ORIGINS` | `["https://writer-two-iota.vercel.app"]` |
-| `ENVIRONMENT` | `production` |
-| `AWS_ACCESS_KEY_ID` | S3 or MinIO key (required for file uploads) |
-| `AWS_SECRET_ACCESS_KEY` | S3 or MinIO secret |
-| `AWS_BUCKET_NAME` | Bucket name |
-| `AWS_ENDPOINT_URL` | Leave blank for AWS S3; MinIO URL otherwise |
-| `ANTHROPIC_API_KEY` | Optional — Anthropic console |
-| `OPENAI_API_KEY` | Optional — OpenAI platform |
-| `GEMINI_API_KEY` | Optional — Google AI Studio |
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `DATABASE_URL` | `postgresql+asyncpg://aip:aip@localhost:5432/aip` | Postgres connection (Railway auto-rewrites `postgres://`) |
+| `REDIS_URL` | `redis://localhost:6379/0` | Celery broker + result backend |
+| `SECRET_KEY` | `changeme-...` | JWT signing key — **must be overridden in production** |
+| `ALGORITHM` | `HS256` | JWT algorithm |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Access token TTL |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token TTL |
+| `AWS_ACCESS_KEY_ID` | `""` | S3 / MinIO access key |
+| `AWS_SECRET_ACCESS_KEY` | `""` | S3 / MinIO secret |
+| `AWS_BUCKET_NAME` | `""` | Bucket name (create `aip-assets` locally) |
+| `AWS_ENDPOINT_URL` | `""` | Leave blank for AWS S3; set to MinIO URL locally |
+| `LITELLM_DEFAULT_MODEL` | `deepseek-chat` | Default generation model |
+| `LITELLM_DEFAULT_PROVIDER` | `deepseek` | Default LiteLLM provider |
+| `ANTHROPIC_API_KEY` | `""` | Anthropic API key (optional) |
+| `OPENAI_API_KEY` | `""` | OpenAI API key (optional, also needed for embeddings) |
+| `GEMINI_API_KEY` | `""` | Google Gemini API key (optional) |
+| `DEEPSEEK_API_KEY` | `""` | DeepSeek API key (optional) |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
+| `OLLAMA_ENABLED` | `false` | Set `true` when a reachable Ollama server is configured |
+| `AI_REQUEST_TIMEOUT` | `60` | Seconds before an AI call is aborted |
+| `EMBEDDING_MODEL` | `text-embedding-3-small` | pgvector embedding model |
+| `EMBEDDING_DIM` | `1536` | Embedding vector dimension |
+| `EMBEDDING_PROVIDER` | `openai` | Provider for embeddings (needs OpenAI-compatible key) |
+| `ENVIRONMENT` | `development` | `production` enforces strong `SECRET_KEY` |
+| `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated or JSON array of allowed origins |
 
-### Vercel (frontend → Settings → Environment Variables)
+> **Production note**: the app refuses to start with `ENVIRONMENT=production` and the
+> default `SECRET_KEY`. Generate a strong key: `openssl rand -hex 32`.
 
-| Variable | Value |
-|----------|-------|
-| `NEXT_PUBLIC_API_URL` | `https://author-production.up.railway.app` |
+> **Embeddings note**: if no `OPENAI_API_KEY` is configured, the RAG pipeline degrades
+> gracefully to full-text keyword search, then to returning all assets. Vector search is
+> only active when `embeddings_enabled` is `True`.
 
 ---
 
-## Database
+## How to Run Locally
 
-Schema is created automatically via `init_db()` in `backend/app/core/database.py` on startup (`Base.metadata.create_all`). The pgvector extension is also created there.
-
-An **initial Alembic migration** is committed under `backend/alembic/versions/`. To apply migrations in production instead of relying on `create_all`:
+### Full stack (recommended)
 
 ```bash
-cd backend
-alembic upgrade head
-```
-
-`alembic/env.py` honors an `ALEMBIC_DB_URL` env var to override the target database.
-
----
-
-## Completing the Deployment (Dashboard Steps)
-
-These steps require the Railway dashboard and cannot be done from code.
-
-### 1. Add the Celery worker service
-
-The worker runs background jobs (knowledge processing, generation, quality validation). Without it, those features silently never complete.
-
-1. Railway → your project → **+ New** → **GitHub Repo** → select `sr9kanth/Author`
-2. Open the new service → **Settings** → **Build** → set **Dockerfile Path** to `backend/Dockerfile` (same as the backend service)
-3. **Settings** → **Deploy** → **Custom Start Command**:
-   ```
-   celery -A app.workers.celery_app worker --loglevel=info
-   ```
-   (Run inside the backend dir: if needed use `sh -c "cd backend && celery -A app.workers.celery_app worker --loglevel=info"` — but since the Dockerfile WORKDIR is `/app` with backend copied in, the plain command works.)
-4. **Variables** tab → add the **same** env vars as the backend service. Critical: `REDIS_URL`, `DATABASE_URL` (reference the shared Postgres/Redis plugins), `SECRET_KEY`, `DEEPSEEK_API_KEY`, and the `AWS_*` vars below.
-5. Deploy. Logs should show `celery@... ready.`
-
-A root `Procfile` documents both process types (`web`, `worker`).
-
-### 2. Configure S3 / MinIO (file uploads)
-
-File uploads (`POST /knowledge/{id}/upload`) store to S3 and the worker reads them back. Set these on **both** the backend AND worker services:
-
-| Variable | Value |
-|----------|-------|
-| `AWS_ACCESS_KEY_ID` | S3 / MinIO access key |
-| `AWS_SECRET_ACCESS_KEY` | S3 / MinIO secret |
-| `AWS_BUCKET_NAME` | bucket name (must already exist) |
-| `AWS_ENDPOINT_URL` | leave blank for AWS S3; set to the MinIO URL otherwise |
-
-Easiest path: create an AWS S3 bucket (any region), generate an IAM key with `s3:PutObject`/`s3:GetObject` on that bucket, and fill in the three values (leave `AWS_ENDPOINT_URL` blank). Alternatively add a MinIO service on Railway and point `AWS_ENDPOINT_URL` at it.
-
-### 3. Create the first admin user — ✅ DONE
-
-The live admin account already exists: `sr9kanth@gmail.com` (administrator), login verified.
-To create additional users, run from anywhere with network access to the backend:
-
-```bash
-EMAIL="you@example.com" PASSWORD="strong-password" FULL_NAME="Your Name" \
-  ./scripts/create-admin.sh
-```
-
-This POSTs to `/api/v1/auth/register` with `role: administrator` and verifies login. Then sign in at the frontend `/login`.
-
-> ⚠️ Steps 1 (Celery worker) and the Redis dependency are **blocked on Railway** while the
-> account's usage is expired. See **"Deployment Status"** at the top and the **"Fully Local
-> Setup"** section for the recommended way forward.
-
----
-
-## Known Issues & Pending Work
-
-### High priority
-| Issue | Location | Status |
-|-------|----------|--------|
-| Redis + Celery worker | Railway project | **Blocked: Railway usage expired.** Run locally (recommended) or use external Redis — see "Background jobs" section |
-| S3 upload untested | Railway env vars | AWS creds set on backend; upload flow not yet exercised end-to-end |
-| Knowledge content in generation | `backend/app/workers/tasks.py` | ✅ Done (`a641d68`) — real extracted topics/concepts + S3 fallback now feed the agent |
-
-### Medium priority
-| Issue | Location | Fix needed |
-|-------|----------|-----------|
-| Keycloak OIDC stub | `frontend/src/lib/auth.ts:49,54` | Implement OIDC flow or remove stub |
-
-### Low priority
-| Issue | Location | Notes |
-|-------|----------|-------|
-| Next.js 14.2.13 security warning | `frontend/package.json` | Upgrade to Next.js 15 when ready |
-| ESLint 8 deprecated | `frontend/package.json` | Update to ESLint 9 |
-
----
-
-## Fully Local Setup (recommended — private & no usage limits)
-
-The entire stack is already containerised in `docker-compose.yml`: **Postgres+pgvector,
-Redis, MinIO (S3-compatible), FastAPI backend, Celery worker, and the Next.js frontend.**
-Everything runs on your machine — no Railway, no Vercel, no cloud usage limits, and your
-data never leaves the laptop. Ideal for the M1 Max / 64 GB.
-
-### Prerequisites
-- **Docker Desktop** for Mac (Apple Silicon build)
-- (Optional, for fully-private AI) **Ollama** — https://ollama.com/download
-
-### One-command start
-```bash
-# from repo root
-cp .env.example .env          # then edit .env (see below)
+cp .env.example .env
+# Add at least one AI provider key (DEEPSEEK_API_KEY, OPENAI_API_KEY, etc.)
 docker compose up --build
 ```
-This brings up everything. Wait for all health checks to go green, then:
 
-| Service | URL |
-|---------|-----|
-| Frontend | http://localhost:3000 |
-| Backend API | http://localhost:8000 |
-| API Docs | http://localhost:8000/docs |
-| MinIO console | http://localhost:9001 (user/pass: `minioadmin`/`minioadmin`) |
+On first run, create the MinIO bucket once:
+- Open http://localhost:9001, log in (minioadmin / minioadmin), create bucket `aip-assets`.
 
-> The backend container runs `start.sh`, which applies migrations automatically.
-> If you run uvicorn manually instead, run `alembic upgrade head` first.
-
-### Create the MinIO bucket (first run only)
-The app expects a bucket named `aip-assets`. Create it once:
-- Open the MinIO console (http://localhost:9001), log in, **Create Bucket** → `aip-assets`.
-- (Or `docker compose exec minio mc mb local/aip-assets` if `mc` is configured.)
-
-### Create your local admin user
+Create your admin user:
 ```bash
 API_URL="http://localhost:8000" EMAIL="you@example.com" \
   PASSWORD="strong-password" FULL_NAME="You" ./scripts/create-admin.sh
 ```
 
-### `.env` for local
-Most defaults in `.env.example` already point at the compose service names. Key choices:
-- **AI provider**: for a paid API set `LITELLM_DEFAULT_PROVIDER=deepseek` + `DEEPSEEK_API_KEY=...`.
-  For **fully local / private**, use Ollama (next section).
-- `CORS_ORIGINS=["http://localhost:3000"]` (already default)
-- `SECRET_KEY` — generate with `openssl rand -hex 32`
+### Fully private AI with Ollama
 
-### Fully-private AI with Ollama (no data leaves your machine)
-1. Install Ollama, then pull a strong model the M1 Max can run:
-   ```bash
-   ollama pull llama3.1:70b      # best quality on 64 GB; or llama3.1:8b for speed
-   ```
-2. In `.env`:
-   ```
-   LITELLM_DEFAULT_PROVIDER=ollama
-   LITELLM_DEFAULT_MODEL=ollama/llama3.1:70b
-   OLLAMA_BASE_URL=http://host.docker.internal:11434
-   ```
-   (`host.docker.internal` lets the backend container reach Ollama running on the host.)
-3. Restart: `docker compose up -d backend celery_worker`.
-
-Now generation, extraction, and validation all run through the local model — **end to end,
-fully offline** (except model download).
-
-### Running pieces individually (without Docker)
 ```bash
-# Postgres + Redis + MinIO only (infra), app run natively
-docker compose -f docker-compose.dev.yml up -d
+ollama pull llama3.1:70b    # or llama3.1:8b for speed
+```
+
+In `.env`:
+```
+LITELLM_DEFAULT_PROVIDER=ollama
+LITELLM_DEFAULT_MODEL=ollama/llama3.1:70b
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+OLLAMA_ENABLED=true
+```
+
+Then `docker compose up -d backend celery_worker`.
+
+### Running services individually (native, without Docker)
+
+```bash
+# Infrastructure only
+docker compose up -d postgres redis minio
 
 # Backend (hot reload)
-cd backend && pip install -r requirements.txt
+cd backend
+pip install -r requirements.txt
 alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 
 # Celery worker (separate terminal)
-cd backend && celery -A app.workers.celery_app worker --loglevel=info
+cd backend
+celery -A app.workers.celery_app worker --loglevel=info
 
 # Frontend
 cd frontend && npm install
-echo 'NEXT_PUBLIC_API_URL=http://localhost:8000' > .env.local
+echo 'BACKEND_URL=http://localhost:8000' > .env.local
 npm run dev
 ```
 
-### Is local better than fighting Railway usage limits?
-For this project — **yes, for development and private use.** You get the full pipeline
-(including Redis + the Celery worker, which Railway currently blocks), zero cloud cost, and
-data privacy. Keep the cloud deploy for sharing a demo URL; do real work locally. The two
-share the same codebase and migrations, so you can switch freely.
-
 ---
 
-## Background jobs without Railway Redis (cloud-only path)
+## How Migrations Work
 
-If you want the **cloud** deploy to run generation without Railway Redis:
-1. **External managed Redis** — e.g. Upstash free tier. Create a DB, copy its `rediss://…`
-   URL, set `REDIS_URL` on the backend (literal value, not a `${{ }}` reference). Note:
-   `rediss://` (TLS) may need a Celery SSL tweak — flag this when revisiting.
-2. **Worker host** — Railway still can't run a second worker service while usage is expired.
-   Run the worker locally pointed at the cloud Postgres + Upstash Redis, or move generation
-   inline (synchronous in the request) as a fallback. Revisit when ready.
+`backend/start.sh` runs `alembic upgrade head` automatically on every boot before starting
+uvicorn. There is no need to run migrations manually in normal usage.
 
----
+Migrations `0001`–`0007` are all written with idempotent guards (checks for existing
+columns/tables before altering them).
 
-## Deploying Changes
-
-All deployments are triggered by pushing to `claude/amazing-turing-8hAH3`.
-
-- **Railway** redeploys the backend automatically on push
-- **Vercel** redeploys the frontend automatically on push
-
+To run manually:
 ```bash
-git add <files>
-git commit -m "your message"
-git push origin claude/amazing-turing-8hAH3
+cd backend
+alembic upgrade head
 ```
 
-Monitor:
-- Railway build logs: railway.app → project → backend service → Deployments
-- Vercel build logs: vercel.com → author project → Deployments
+To target a different database (e.g. production from local):
+```bash
+ALEMBIC_DB_URL="postgresql+asyncpg://..." alembic upgrade head
+```
 
 ---
 
-## Next Steps (Suggested Priority Order)
+## Known Quirks
 
-Done this session: ✅ admin user, ✅ Alembic initial migration, ✅ frontend wired to live API,
-✅ real knowledge content in generation, ✅ DB connected, ✅ all startup crashes fixed.
+- **Next.js proxy reads `BACKEND_URL` at runtime, not build time.** The Route Handler at
+  `frontend/src/app/api/proxy/[...path]/route.ts` calls `process.env.BACKEND_URL` inside
+  the handler function body. This means you can update `BACKEND_URL` without rebuilding the
+  frontend container — but it also means the variable must be set in the runtime environment
+  (not just at build time in Docker args).
 
-Remaining / when revisiting:
-1. **Stand up the background-job pipeline** — recommended: run the **full stack locally**
-   (`docker compose up`) which includes Redis + the worker. See "Fully Local Setup". This is
-   the unblock for generation/quality jobs.
-2. **(Optional, fully private)** point AI at **Ollama** (`llama3.1:70b`) on the M1 Max — no
-   data leaves the machine.
-3. **Verify S3 upload** — upload a knowledge asset and confirm the worker extracts it.
-4. **Cloud generation (later)** — external Redis (Upstash) + a worker host; mind the
-   `rediss://` TLS tweak for Celery.
+- **Celery worker must have the same env vars as the backend.** The worker needs
+  `DATABASE_URL`, `REDIS_URL`, all `AWS_*` vars, and all AI provider keys. If the worker is
+  run as a separate Docker service (or separately on Railway), copy the full env set.
+
+- **Embeddings require an OpenAI-compatible key.** Without `OPENAI_API_KEY`, the RAG
+  pipeline falls back to full-text search silently. This is intentional; generation still
+  works, just with less precise knowledge grounding.
+
+- **`CORS_ORIGINS` is parsed as a raw string.** It accepts either a comma-separated list
+  (`http://localhost:3000,https://example.com`) or a JSON array string. Do not rely on
+  pydantic-settings auto-decoding JSON env vars for this field.
+
+---
+
+## Remaining Backlog
+
+| Item | Notes |
+|------|-------|
+| Right-side detail panel / panelling | Full-screen question editor panel in review; currently basic split view |
+| Prompt governance | Version-controlled system prompts; A/B testing prompt variants |
+| Reviewer assignment / separation of duties | Assign items to specific reviewers; prevent author self-review |
+| QTI export | IMS QTI 2.1/3.0 export from repository |
+| Full-text / vector search on repository | Currently filtered by metadata only; no semantic search |
+| RAG embedding pipeline for all providers | Embeddings currently only via OpenAI-compatible endpoint |
+| Keycloak OIDC | Stub exists in `frontend/src/lib/auth.ts`; not yet implemented |
 
 ---
 
@@ -569,4 +454,3 @@ Remaining / when revisiting:
 2. Connect the `sr9kanth/Author` GitHub repository
 3. When the session starts, Claude will be on a fresh clone — your changes are on `claude/amazing-turing-8hAH3`
 4. Say: _"Read HANDOVER.md and continue development on branch `claude/amazing-turing-8hAH3`"_
-5. Claude Code will have access to all files, can run commands, edit code, and push changes
