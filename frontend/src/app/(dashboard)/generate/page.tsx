@@ -238,6 +238,29 @@ export default function GeneratePage() {
               )}
             </Field>
 
+            <Field label="Stimulus (optional)" hint="Link a scenario or passage to ground all generated questions in that context.">
+              <div className="relative">
+                <select value={selectedStimulus} onChange={(e) => setSelectedStimulus(e.target.value)} className={cn(INPUT_CLS, "appearance-none pr-10")}>
+                  <option value="">No stimulus — free generation</option>
+                  {STIMULI.map((s) => (
+                    <option key={s.id} value={s.id}>{s.title}</option>
+                  ))}
+                </select>
+                <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
+              </div>
+              {selectedStimulus && (() => {
+                const s = STIMULI.find((x) => x.id === selectedStimulus);
+                return s ? (
+                  <div className="mt-2 rounded-xl border border-indigo-200 dark:border-indigo-500/30 bg-indigo-50/60 dark:bg-indigo-500/10 p-3">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300 mb-1">
+                      <BookOpen size={12} /> {s.stimulus_type.replace(/_/g, " ")}
+                    </div>
+                    <p className="text-[13px] text-stone-700 dark:text-stone-300 leading-relaxed line-clamp-3 whitespace-pre-line">{s.body}</p>
+                  </div>
+                ) : null;
+              })()}
+            </Field>
+
             <Field label="AI model" hint="Select the model to use for generation. Ollama models run locally.">
               <div className="relative">
                 <select value={aiModel} onChange={(e) => setAiModel(e.target.value)} className={cn(INPUT_CLS, "appearance-none pr-10")}>
