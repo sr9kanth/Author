@@ -202,7 +202,7 @@ export const generationApi = {
     request<GenerationJob>("/generation/jobs", { method: "POST", body: JSON.stringify(data) }),
   listContents: (jobId: string) =>
     request<PaginatedList<GeneratedContent>>(`/generation/jobs/${jobId}/contents`),
-  updateContent: (id: string, data: { status?: string; body?: string }) =>
+  updateContent: (id: string, data: { status?: string; body?: string; assigned_reviewer_id?: string | null; reviewed_by_id?: string | null; review_comment?: string | null }) =>
     request<GeneratedContent>(`/generation/contents/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),

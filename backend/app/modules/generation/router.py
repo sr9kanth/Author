@@ -79,6 +79,19 @@ async def update_content(content_id: str, data: GeneratedContentUpdate, db: DBSe
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
 
+@router.get("/contents/{content_id}/distractors")
+async def get_distractors(content_id: str, db: DBSession, current_user_id: CurrentUserID) -> list:
+    service = GenerationService(db)
+    try:
+        content = await service.get_content_model(content_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    if content is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Content not found")
+    metadata = content.content_metadata or {}
+    return metadata.get("distractors", [])
+
+
 @router.get("/contents", response_model=GeneratedContentList)
 async def list_all_contents(
     db: DBSession,

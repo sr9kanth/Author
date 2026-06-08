@@ -34,6 +34,10 @@ For each question, output a JSON object with:
   - difficulty: easy | medium | hard
   - cognitive_level: remember | understand | apply | analyse | evaluate | create
   - keywords: list of relevant keywords
+  - distractors: list of objects, one per wrong answer option, each with:
+      - option: the option letter or short text identifying the wrong answer (e.g. "A", "B")
+      - rationale: a concise explanation of why this option is incorrect
+      - misconception: a short label for the common misconception or error this option targets (e.g. "Confuses X with Y")
 
 Return a JSON array of question objects only, no additional text."""
 

@@ -308,12 +308,15 @@ def run_generation_job(self, job_id: str) -> dict:
                 if agent_result.success:
                     from app.modules.generation.models import ContentStatus
                     for q in agent_result.data.get("questions", []):
+                        metadata = dict(q)
+                        if "distractors" not in metadata:
+                            metadata["distractors"] = []
                         content = GeneratedContent(
                             job_id=job.id,
                             stimulus_id=job.stimulus_id,
                             content_type=q.get("question_type", "multiple_choice"),
                             body=q.get("stem", ""),
-                            content_metadata=q,
+                            content_metadata=metadata,
                             framework_alignment=q.get("framework_alignment", {}),
                             source_references=list(job.knowledge_asset_ids),
                             ai_provider=job.ai_provider,

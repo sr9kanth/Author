@@ -168,6 +168,9 @@ export interface GeneratedContent {
   prompt_version: string;
   status: ContentStatus;
   validation_score: number | null;
+  assigned_reviewer_id: string | null;
+  reviewed_by_id: string | null;
+  review_comment: string | null;
   created_at: string;
   updated_at: string;
   stimulus?: Stimulus | null;

@@ -7,10 +7,16 @@ import { PageHeader, EmptyState, Segmented } from "@/components/ui/index";
 import { StatusBadge, Tag } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { generationApi, workflowApi, repositoryApi, metadataApi } from "@/lib/api";
+import { generationApi, workflowApi, repositoryApi, metadataApi, usersApi, authApi } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
-import type { GeneratedContent, MetadataDimension } from "@/types";
-import { Download, Pencil, X, Check, AlertCircle, BookOpen, Target, ClipboardCheck } from "lucide-react";
+import type { GeneratedContent, MetadataDimension, User } from "@/types";
+import { Download, Pencil, X, Check, AlertCircle, BookOpen, Target, ClipboardCheck, UserCheck, ChevronDown, ChevronRight } from "lucide-react";
+
+interface DistractorEntry {
+  option: string;
+  rationale: string;
+  misconception: string;
+}
 
 interface ReviewItem {
   id: string;
@@ -25,6 +31,11 @@ interface ReviewItem {
   rationale: string;
   flags: number;
   stimulus?: { title: string; body: string };
+  jobCreatedBy?: string;
+  assignedReviewerId?: string | null;
+  reviewedById?: string | null;
+  reviewComment?: string | null;
+  distractors: DistractorEntry[];
 }
 
 function metaStr(meta: Record<string, unknown>, key: string): string {
@@ -61,6 +72,19 @@ function toReviewItem(c: GeneratedContent): ReviewItem {
     rationale: metaStr(meta, "rationale"),
     flags: typeof meta.flags === "number" ? meta.flags : 0,
     stimulus: c.stimulus ? { title: c.stimulus.title, body: c.stimulus.body } : undefined,
+    assignedReviewerId: c.assigned_reviewer_id ?? null,
+    reviewedById: c.reviewed_by_id ?? null,
+    reviewComment: c.review_comment ?? null,
+    distractors: Array.isArray(meta.distractors)
+      ? (meta.distractors as unknown[]).map((d) => {
+          const obj = (d && typeof d === "object" ? d : {}) as Record<string, unknown>;
+          return {
+            option: typeof obj.option === "string" ? obj.option : "",
+            rationale: typeof obj.rationale === "string" ? obj.rationale : "",
+            misconception: typeof obj.misconception === "string" ? obj.misconception : "",
+          };
+        })
+      : [],
   };
 }
 
@@ -86,6 +110,11 @@ function ReviewPageInner() {
     (d) => d.is_active && (d.scopes ?? []).includes("question"),
   );
 
+  const { data: usersData } = useAsync(() => usersApi.list(), []);
+  const users: User[] = usersData?.items ?? [];
+
+  const { data: currentUser } = useAsync(() => authApi.me(), []);
+
   const fetched = useMemo(() => (data?.items ?? []).map(toReviewItem), [data]);
 
   const [items, setItems] = useState<ReviewItem[]>([]);
@@ -94,14 +123,34 @@ function ReviewPageInner() {
   const [toast, setToast] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
+  const [reviewComment, setReviewComment] = useState("");
+  const [assigningReviewerId, setAssigningReviewerId] = useState<string>("");
+  const [distractorsOpen, setDistractorsOpen] = useState(false);
 
   useEffect(() => {
     setItems(fetched);
     setActiveId(fetched[0]?.id ?? null);
   }, [fetched]);
 
+  // Sync comment and reviewer fields when active item changes
+  useEffect(() => {
+    if (active) {
+      setReviewComment(active.reviewComment ?? "");
+      setAssigningReviewerId(active.assignedReviewerId ?? "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId]);
+
   const active = items.find((i) => i.id === activeId) ?? items[0] ?? null;
-  const visible = items.filter((i) => filter === "all" || i.status === filter);
+
+  const isMyQueue = filter === "mine";
+  const visible = items.filter((i) => {
+    if (isMyQueue) return i.assignedReviewerId === currentUser?.id;
+    return filter === "all" || i.status === filter;
+  });
+
+  // Separation of duties check
+  const isAuthorOfActive = active && currentUser && active.jobCreatedBy === currentUser.id;
 
   const setStatus = (id: string, status: string) =>
     setItems((arr) => arr.map((i) => (i.id === id ? { ...i, status } : i)));
@@ -122,15 +171,19 @@ function ReviewPageInner() {
     if (!active) return;
     const id = active.id;
     try {
-      // Persist the workflow state on the server.
+      // Persist review comment and reviewed_by alongside approval
+      await generationApi.updateContent(id, {
+        reviewed_by_id: currentUser?.id ?? null,
+        review_comment: reviewComment || null,
+      });
       await workflowApi.transition(id, "approved");
-      // Push the item into the repository; tolerate "already exists".
       try {
         await repositoryApi.create({ content_id: id });
       } catch (e) {
         if (!isAlreadyExists(e)) throw e;
       }
       setStatus(id, "approved");
+      setItems((arr) => arr.map((i) => (i.id === id ? { ...i, reviewedById: currentUser?.id ?? null, reviewComment: reviewComment || null } : i)));
       notify("Item approved & added to repository");
       const idx = visible.findIndex((i) => i.id === id);
       const next = visible[idx + 1] || visible[idx - 1];
@@ -145,12 +198,32 @@ function ReviewPageInner() {
     if (!active) return;
     const id = active.id;
     try {
+      await generationApi.updateContent(id, {
+        reviewed_by_id: currentUser?.id ?? null,
+        review_comment: reviewComment || null,
+      });
       await workflowApi.transition(id, "draft", "Sent back for revision");
       setStatus(id, "draft");
+      setItems((arr) => arr.map((i) => (i.id === id ? { ...i, reviewedById: currentUser?.id ?? null, reviewComment: reviewComment || null } : i)));
       notify("Sent back to draft");
     } catch (e) {
       notify(`Failed to send back: ${errMsg(e)}`);
       reload();
+    }
+  };
+
+  const assignReviewer = async (reviewerId: string) => {
+    if (!active) return;
+    const id = active.id;
+    setAssigningReviewerId(reviewerId);
+    try {
+      await generationApi.updateContent(id, {
+        assigned_reviewer_id: reviewerId || null,
+      });
+      setItems((arr) => arr.map((i) => (i.id === id ? { ...i, assignedReviewerId: reviewerId || null } : i)));
+      notify(reviewerId ? "Reviewer assigned" : "Reviewer removed");
+    } catch (e) {
+      notify(`Failed to assign reviewer: ${errMsg(e)}`);
     }
   };
 
@@ -211,6 +284,11 @@ function ReviewPageInner() {
     {} as Record<string, number>,
   );
 
+  const myQueueCount = currentUser ? items.filter((i) => i.assignedReviewerId === currentUser.id).length : 0;
+
+  const assignedUser = active && active.assignedReviewerId ? users.find((u) => u.id === active.assignedReviewerId) : null;
+  const reviewedByUser = active && active.reviewedById ? users.find((u) => u.id === active.reviewedById) : null;
+
   if (!jobId || (!loading && items.length === 0)) {
     return (
       <div>
@@ -259,6 +337,7 @@ function ReviewPageInner() {
                   { value: "generated", label: `New ${counts.generated ?? 0}` },
                   { value: "validated", label: `Validated ${counts.validated ?? 0}` },
                   { value: "approved", label: `Done ${counts.approved ?? 0}` },
+                  { value: "mine", label: `My queue ${myQueueCount}` },
                 ]}
                 value={filter}
                 onChange={setFilter}
@@ -280,6 +359,11 @@ function ReviewPageInner() {
                           {it.flags > 0 && (
                             <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
                               <AlertCircle size={12} />{it.flags}
+                            </span>
+                          )}
+                          {it.assignedReviewerId && (
+                            <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-indigo-500 dark:text-indigo-400">
+                              <UserCheck size={12} />
                             </span>
                           )}
                           <StatusBadge status={it.status} size="sm" />
@@ -384,12 +468,61 @@ function ReviewPageInner() {
                 </div>
               )}
 
+              {/* Reviewer assignment section */}
+              <div className="rounded-xl border border-stone-200 dark:border-white/[0.07] p-4 mb-6 space-y-3">
+                <div className="text-[12px] font-medium uppercase tracking-wide text-stone-400 dark:text-stone-500">
+                  Reviewer Assignment
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[12px] text-stone-500 dark:text-stone-400">Assign reviewer</label>
+                  <select
+                    value={assigningReviewerId}
+                    onChange={(e) => assignReviewer(e.target.value)}
+                    className="w-full rounded-lg border border-stone-200 dark:border-white/[0.08] bg-white dark:bg-white/[0.03] px-3 py-2 text-[13px] text-stone-800 dark:text-stone-200 focus:outline-none focus:ring-2 focus:ring-indigo-400/60"
+                  >
+                    <option value="">— Unassigned —</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>{u.full_name} ({u.email})</option>
+                    ))}
+                  </select>
+                </div>
+
+                {reviewedByUser && (
+                  <div className="flex items-center gap-2 text-[12.5px] text-stone-500 dark:text-stone-400">
+                    <UserCheck size={13} className="text-emerald-500" />
+                    <span>Reviewed by <span className="font-medium text-stone-700 dark:text-stone-200">{reviewedByUser.full_name}</span></span>
+                  </div>
+                )}
+              </div>
+
+              {/* Review comment */}
+              <div className="space-y-1.5 mb-6">
+                <label className="text-[12px] font-medium uppercase tracking-wide text-stone-400 dark:text-stone-500">Review comment</label>
+                <textarea
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  rows={3}
+                  placeholder="Optional comment saved with approve or reject action…"
+                  className="w-full rounded-xl border border-stone-200 dark:border-white/[0.08] bg-white dark:bg-white/[0.03] px-3.5 py-2.5 text-[13.5px] leading-relaxed text-stone-900 dark:text-white placeholder:text-stone-300 dark:placeholder:text-stone-600 focus:outline-none focus:ring-2 focus:ring-indigo-400/60"
+                />
+              </div>
+
               {active.flags > 0 && (
                 <div className="rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-4">
                   <div className="flex items-center gap-1.5 text-[12.5px] font-semibold text-amber-700 dark:text-amber-300 mb-1">
                     <AlertCircle size={15} /> {active.flags} validation {active.flags === 1 ? "flag" : "flags"}
                   </div>
                   <p className="text-[12.5px] text-amber-700/90 dark:text-amber-200/80">Automated checks suggest the distractors may be too similar. Review before approving.</p>
+                </div>
+              )}
+
+              {/* Separation of duties warning */}
+              {isAuthorOfActive && (
+                <div className="mt-4 rounded-xl border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 p-4">
+                  <div className="flex items-center gap-1.5 text-[12.5px] font-semibold text-rose-700 dark:text-rose-300">
+                    <AlertCircle size={15} /> You cannot approve your own questions
+                  </div>
                 </div>
               )}
             </div>
@@ -405,8 +538,14 @@ function ReviewPageInner() {
                 Edit
               </Button>
               <div className="flex-1" />
-              <Button variant="secondary" Icon={X} onClick={reject}>Reject</Button>
-              <Button Icon={Check} onClick={approve}>Approve</Button>
+              {isAuthorOfActive ? (
+                <span className="text-[12px] text-rose-500 dark:text-rose-400 italic">Author cannot approve</span>
+              ) : (
+                <>
+                  <Button variant="secondary" Icon={X} onClick={reject}>Reject</Button>
+                  <Button Icon={Check} onClick={approve}>Approve</Button>
+                </>
+              )}
             </div>
           </div>
         </div>

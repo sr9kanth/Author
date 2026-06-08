@@ -32,6 +32,9 @@ class GenerationJobRead(BaseModel):
     prompt_version: str
     celery_task_id: str | None
     error_message: str | None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    cost_usd: float | None = None
     created_by: uuid.UUID
     created_at: datetime
     completed_at: datetime | None
