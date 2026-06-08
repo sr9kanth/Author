@@ -345,4 +345,9 @@ export const promptTemplatesApi = {
   getActive: (type: string) => request<PromptTemplate>(`/prompt-templates/active?type=${type}`),
 };
 
+// ---- Users (reviewer assignment dropdown) ----
+export const usersApi = {
+  list: () => request<{ items: User[]; total: number }>("/users"),
+};
+
 export { ApiError };
