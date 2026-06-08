@@ -249,6 +249,11 @@ export const repositoryApi = {
   get: (id: string) => request<AssessmentItem>(`/repository/${id}`),
   create: (data: { content_id: string; item_code?: string; tags?: string[]; notes?: string }) =>
     request<AssessmentItem>("/repository", { method: "POST", body: JSON.stringify(data) }),
+  importCsv: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return upload<{ imported: number; errors: string[] }>("/repository/import", fd);
+  },
 };
 
 // ---- Workflow ----

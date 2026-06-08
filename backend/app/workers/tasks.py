@@ -261,6 +261,22 @@ def run_generation_job(self, job_id: str) -> dict:
                         if fw.description:
                             framework_context += f": {fw.description}"
 
+                # --- Load item authoring guides for the framework ---
+                guide_text = ""
+                if config and config.framework_id:
+                    from app.modules.guides.models import ItemGuide
+                    guides_result = await db.execute(
+                        select(ItemGuide).where(
+                            ItemGuide.framework_id == config.framework_id,
+                            ItemGuide.is_active == True,  # noqa: E712
+                        )
+                    )
+                    active_guides = guides_result.scalars().all()
+                    if active_guides:
+                        guide_text = "\n\n".join(
+                            f"### {g.title}\n{g.body}" for g in active_guides
+                        )
+
                 context = {
                     "question_count": config.question_count if config else 10,
                     "question_type": (config.question_types[0] if config and config.question_types else "multiple_choice"),
@@ -271,6 +287,7 @@ def run_generation_job(self, job_id: str) -> dict:
                     "language": config.language if config else "en",
                     "framework_context": framework_context,
                     "knowledge_content": knowledge_text,
+                    "guide_text": guide_text,
                     "ai_provider": job.ai_provider,
                     "ai_model": job.ai_model,
                 }

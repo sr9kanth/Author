@@ -16,6 +16,7 @@ class GenerationJobCreate(BaseModel):
     ai_model: str | None = None
     prompt_template: str | None = None
     prompt_version: str = "1.0"
+    stimulus_id: uuid.UUID | None = None
 
 
 class GenerationJobRead(BaseModel):

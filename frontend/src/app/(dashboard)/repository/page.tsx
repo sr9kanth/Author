@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CARD } from "@/components/ui/card";
 import { PageHeader, EmptyState, SearchInput, Segmented } from "@/components/ui/index";
@@ -10,7 +10,124 @@ import { cn } from "@/lib/utils";
 import { repositoryApi } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
 import { DetailPanel, useDetailPanel } from "@/components/ui/detail-panel";
-import { Download, Package, Copy, Eye, Plus, Search, FileQuestion, LayoutDashboard, SlidersHorizontal } from "lucide-react";
+import { Download, Package, Copy, Eye, Plus, Search, FileQuestion, LayoutDashboard, SlidersHorizontal, Upload, X } from "lucide-react";
+
+const CSV_TEMPLATE =
+  "stem,options,correct_answer,rationale,question_type,difficulty,cognitive_level\r\n" +
+  "What is the capital of France?,Paris|London|Berlin|Rome,Paris,Paris is the capital city of France.,multiple_choice,easy,remember\r\n" +
+  "Which gas do plants absorb during photosynthesis?,Oxygen|Carbon Dioxide|Nitrogen|Hydrogen,Carbon Dioxide,Plants use CO2 in photosynthesis.,multiple_choice,medium,understand\r\n";
+
+function downloadTemplate() {
+  const blob = new Blob([CSV_TEMPLATE], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "import_template.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ imported: number; errors: string[] } | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  async function handleUpload() {
+    if (!file) return;
+    setLoading(true);
+    setUploadError(null);
+    setResult(null);
+    try {
+      const res = await repositoryApi.importCsv(file);
+      setResult(res);
+      if (res.imported > 0) onDone();
+    } catch (e: unknown) {
+      setUploadError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
+      <div
+        className="relative w-full max-w-md bg-white dark:bg-stone-900 rounded-2xl shadow-2xl border border-stone-200 dark:border-white/[0.08] p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-4 right-4 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200">
+          <X size={18} />
+        </button>
+        <h2 className="text-[15px] font-semibold text-stone-800 dark:text-stone-100 mb-1">Import questions from CSV</h2>
+        <p className="text-[12.5px] text-stone-500 dark:text-stone-400 mb-4">
+          Upload a CSV file with your questions. Imported items go straight to the repository as approved.
+        </p>
+
+        <button
+          onClick={downloadTemplate}
+          className="text-[12px] text-indigo-600 dark:text-indigo-400 underline underline-offset-2 mb-4 inline-block hover:text-indigo-800 dark:hover:text-indigo-200"
+        >
+          Download template CSV
+        </button>
+
+        <div
+          className={cn(
+            "border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition mb-4",
+            file ? "border-indigo-400 bg-indigo-50/40 dark:bg-indigo-500/5" : "border-stone-200 dark:border-white/[0.08] hover:border-stone-300 dark:hover:border-white/[0.15]",
+          )}
+          onClick={() => fileRef.current?.click()}
+        >
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={(e) => { setFile(e.target.files?.[0] ?? null); setResult(null); setUploadError(null); }}
+          />
+          {file ? (
+            <p className="text-[13px] text-stone-700 dark:text-stone-200">{file.name}</p>
+          ) : (
+            <p className="text-[13px] text-stone-400 dark:text-stone-500">Click to select a .csv file</p>
+          )}
+        </div>
+
+        {uploadError && (
+          <p className="text-[12px] text-rose-600 dark:text-rose-400 mb-3">{uploadError}</p>
+        )}
+
+        {result && (
+          <div className="mb-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 p-3">
+            <p className="text-[13px] font-medium text-emerald-700 dark:text-emerald-300">
+              {result.imported} question{result.imported !== 1 ? "s" : ""} imported successfully
+            </p>
+            {result.errors.length > 0 && (
+              <ul className="mt-2 space-y-0.5">
+                {result.errors.map((e, i) => (
+                  <li key={i} className="text-[11.5px] text-rose-600 dark:text-rose-400">{e}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <Button variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>
+          <Button
+            className="flex-1"
+            Icon={Upload}
+            disabled={!file || loading}
+            onClick={handleUpload}
+          >
+            {loading ? "Uploading…" : "Upload"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface RepoRow {
   id: string;

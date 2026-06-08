@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 from app.agents.base import AgentResult, BaseAgent
-from app.modules.generation.prompts import QUESTION_GENERATION_SYSTEM, QUESTION_GENERATION_USER_TEMPLATE
+from app.modules.generation.prompts import QUESTION_GENERATION_SYSTEM, QUESTION_GENERATION_USER_TEMPLATE, build_system_prompt
 
 
 def _parse_questions(raw: str) -> list[dict]:
@@ -76,8 +76,9 @@ class GenerationAgent(BaseAgent):
             knowledge_content=knowledge_content[:6000],
         )
 
+        system_prompt = build_system_prompt(context.get("guide_text"))
         messages = [
-            {"role": "system", "content": QUESTION_GENERATION_SYSTEM},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
 

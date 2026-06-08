@@ -51,6 +51,7 @@ from app.modules.guides.router import router as guides_router
 from app.modules.metadata.router import router as metadata_router
 from app.modules.audit.router import router as audit_router
 from app.modules.settings.router import router as settings_router
+from app.modules.generation.stimuli_router import router as stimuli_router
 
 API_PREFIX = "/api/v1"
 
@@ -69,6 +70,7 @@ app.include_router(guides_router, prefix=API_PREFIX)
 app.include_router(metadata_router, prefix=API_PREFIX)
 app.include_router(audit_router, prefix=API_PREFIX)
 app.include_router(settings_router, prefix=API_PREFIX)
+app.include_router(stimuli_router, prefix=API_PREFIX)
 
 
 @app.get("/health", tags=["health"])

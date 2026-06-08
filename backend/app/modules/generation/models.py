@@ -31,6 +31,7 @@ class GenerationJob(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     status: Mapped[JobStatus] = mapped_column(Enum(JobStatus), nullable=False, default=JobStatus.pending)
     configuration_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("assessment_configurations.id"), nullable=True)
+    stimulus_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("stimuli.id"), nullable=True)
     knowledge_asset_ids: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     ai_provider: Mapped[str] = mapped_column(String(100), nullable=False, default="anthropic")
     ai_model: Mapped[str] = mapped_column(String(200), nullable=False, default="claude-opus-4-8")

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { knowledgeApi } from "@/lib/api";
 import {
   LayoutDashboard, Layers, Database, Sparkles, ClipboardCheck,
-  Library, Package, LogOut, CheckSquare, Settings,
+  Library, Package, LogOut, CheckSquare, Settings, Tag,
 } from "lucide-react";
 
 const NAV = [
@@ -19,6 +19,7 @@ const NAV = [
   { key: "review", label: "Review", href: "/review", Icon: ClipboardCheck, section: "Quality", count: 5 },
   { key: "repository", label: "Repository", href: "/repository", Icon: Library, section: "Quality" },
   { key: "assembly", label: "Assembly", href: "/assembly", Icon: Package, section: "Delivery" },
+  { key: "metadata", label: "Metadata", href: "/metadata", Icon: Tag, section: "System" },
   { key: "settings", label: "Settings", href: "/settings", Icon: Settings, section: "System" },
 ];
 
