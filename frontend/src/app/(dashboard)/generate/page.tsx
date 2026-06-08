@@ -8,9 +8,9 @@ import { Tag } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { INPUT_CLS } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { frameworksApi, generationApi, knowledgeApi, orchestrationApi } from "@/lib/api";
+import { frameworksApi, generationApi, knowledgeApi, orchestrationApi, stimuliApi } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
-import { Sparkles, ChevronDown, Check, ClipboardCheck, CheckCircle, AlertCircle, Database, X } from "lucide-react";
+import { Sparkles, ChevronDown, Check, ClipboardCheck, CheckCircle, AlertCircle, Database, X, BookOpen } from "lucide-react";
 
 const ITEM_TYPES = ["Multiple Choice", "Short Answer", "True / False", "Numeric Response", "Extended Response"];
 const DIFFICULTY = ["Easy", "Medium", "Hard"];
@@ -54,6 +54,10 @@ export default function GeneratePage() {
     [kData],
   );
 
+  const { data: stimuliData } = useAsync(() => stimuliApi.list(), []);
+  const STIMULI = useMemo(() => stimuliData ?? [], [stimuliData]);
+
+  const [selectedStimulus, setSelectedStimulus] = useState("");
   const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
   const toggleAsset = (id: string) =>
     setSelectedAssets((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
@@ -110,6 +114,7 @@ export default function GeneratePage() {
         knowledge_asset_ids: selectedAssets.length ? selectedAssets : undefined,
         ai_model: selectedModel?.id,
         ai_provider: selectedModel?.provider,
+        stimulus_id: selectedStimulus || undefined,
       });
       setProgress(30);
       // Poll until terminal state, with a hard timeout so a stuck/lost worker
