@@ -11,39 +11,155 @@ import { useAsync } from "@/lib/use-async";
 import { DetailPanel, useDetailPanel } from "@/components/ui/detail-panel";
 import { Tag } from "@/components/ui/badge";
 import type { KnowledgeAsset } from "@/types";
-import { Settings, FileText, RefreshCw, Trash2, Sparkles, Database } from "lucide-react";
+import {
+  Settings,
+  FileText,
+  RefreshCw,
+  Trash2,
+  Sparkles,
+  Database,
+  ChevronRight,
+  ChevronDown,
+} from "lucide-react";
 
 type DisplayStatus = "indexed" | "processing" | "failed";
+
+// ── Topic tree types ──────────────────────────────────────────────────────────
+
+interface TopicNode {
+  key: string;       // e.g. "1", "301", "2.3"
+  label: string;
+  children: TopicNode[];
+  genCount: number;  // proxy: number of leaf concepts under this node
+}
+
+/** Build a flat or nested TopicNode[] from the raw extracted_topics field */
+function buildTopicTree(raw: unknown): TopicNode[] {
+  if (!raw) return [];
+
+  if (Array.isArray(raw)) {
+    return raw.map((item, idx) => {
+      const label = String(item);
+      return { key: String(idx + 1), label, children: [], genCount: 1 };
+    });
+  }
+
+  if (typeof raw === "object" && raw !== null) {
+    const rec = raw as Record<string, unknown>;
+    return Object.entries(rec).map(([key, val]) => {
+      if (Array.isArray(val)) {
+        const children: TopicNode[] = val.map((child, ci) => ({
+          key: `${key}.${ci + 1}`,
+          label: String(child),
+          children: [],
+          genCount: 1,
+        }));
+        return { key, label: key, children, genCount: children.length };
+      }
+      if (typeof val === "object" && val !== null) {
+        const children = buildTopicTree(val);
+        return { key, label: key, children, genCount: children.reduce((s, c) => s + c.genCount, 0) };
+      }
+      return { key, label: String(val), children: [], genCount: 1 };
+    });
+  }
+
+  return [];
+}
+
+// ── Topic tree component ──────────────────────────────────────────────────────
+
+function GenBadge({ count }: { count: number }) {
+  return (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 shrink-0">
+      Gen {count}
+    </span>
+  );
+}
+
+function TopicTreeNode({ node, depth = 0 }: { node: TopicNode; depth?: number }) {
+  const [expanded, setExpanded] = useState(depth === 0);
+  const hasChildren = node.children.length > 0;
+
+  return (
+    <li>
+      <div
+        className={cn(
+          "flex items-center gap-2 py-1.5 pr-2 rounded-lg group",
+          hasChildren ? "cursor-pointer hover:bg-stone-50 dark:hover:bg-white/[0.03]" : "",
+          depth > 0 ? "pl-3" : "pl-1",
+        )}
+        style={depth > 1 ? { paddingLeft: `${depth * 12 + 4}px` } : undefined}
+        onClick={() => hasChildren && setExpanded((p) => !p)}
+      >
+        {/* expand/collapse icon */}
+        <span className="w-4 h-4 shrink-0 flex items-center justify-center text-stone-400">
+          {hasChildren ? (
+            expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />
+          ) : (
+            <span className="w-1.5 h-1.5 rounded-full bg-stone-200 dark:bg-white/20 inline-block" />
+          )}
+        </span>
+
+        {/* number */}
+        <span className="font-mono text-[11px] font-bold text-stone-400 dark:text-stone-500 shrink-0 min-w-[28px]">
+          {node.key}
+        </span>
+
+        {/* label */}
+        <span className="text-[13px] text-stone-800 dark:text-stone-200 flex-1 leading-snug">
+          {node.label}
+        </span>
+
+        {/* Gen badge */}
+        <GenBadge count={node.genCount} />
+      </div>
+
+      {/* children */}
+      {hasChildren && expanded && (
+        <ul
+          className="relative ml-5 border-l border-stone-100 dark:border-white/[0.06]"
+        >
+          {node.children.map((child) => (
+            <TopicTreeNode key={child.key} node={child} depth={depth + 1} />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+function TopicTree({ nodes }: { nodes: TopicNode[] }) {
+  if (nodes.length === 0) {
+    return (
+      <p className="text-[12.5px] text-stone-400 dark:text-stone-500 italic">
+        No topics extracted yet. Re-index this source to extract topics.
+      </p>
+    );
+  }
+  return (
+    <ul className="space-y-0.5">
+      {nodes.map((n) => (
+        <TopicTreeNode key={n.key} node={n} depth={0} />
+      ))}
+    </ul>
+  );
+}
+
+// ── Asset helpers ─────────────────────────────────────────────────────────────
 
 interface Asset {
   id: string;
   name: string;
   type: string;
   size: string;
+  fileSizeBytes: number | null;
   chunks: number;
   status: DisplayStatus;
   uploaded: string;
-  topics: string[];
+  topics: TopicNode[];
   keywords: string[];
   storagePath: string | null;
-}
-
-function labelsFrom(rec: unknown): string[] {
-  if (!rec) return [];
-  if (Array.isArray(rec)) return rec.map((v) => String(v));
-  if (typeof rec === "object") return Object.keys(rec as Record<string, unknown>);
-  return [];
-}
-
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-[11px] font-medium uppercase tracking-wide text-stone-400 dark:text-stone-500">
-        {label}
-      </span>
-      <span className="text-[13.5px] text-stone-800 dark:text-stone-100 break-words">{value}</span>
-    </div>
-  );
 }
 
 function fmtSize(bytes: number | null): string {
@@ -101,6 +217,19 @@ function typeStyle(t: string) {
   return m[t] || "bg-stone-100 text-stone-500 dark:bg-white/[0.06] dark:text-stone-400";
 }
 
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[11px] font-medium uppercase tracking-wide text-stone-400 dark:text-stone-500">
+        {label}
+      </span>
+      <span className="text-[13.5px] text-stone-800 dark:text-stone-100 break-words">{value}</span>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function KnowledgePage() {
   const { data, loading, error, reload } = useAsync(() => knowledgeApi.list(0, 100), []);
 
@@ -121,10 +250,11 @@ export default function KnowledgePage() {
         name: a.title,
         type: a.content_type.toUpperCase().slice(0, 4),
         size: fmtSize(a.file_size),
+        fileSizeBytes: a.file_size,
         chunks: chunkCount(a),
         status: displayStatus(a.status),
         uploaded: a.created_at,
-        topics: labelsFrom(a.extracted_topics),
+        topics: buildTopicTree(a.extracted_topics),
         keywords: a.keywords ?? [],
         storagePath: a.storage_path,
       })),
@@ -141,7 +271,6 @@ export default function KnowledgePage() {
     setUploading(true);
     try {
       for (const file of files) {
-        // Two-step flow: create the asset record, then attach the file.
         const asset = await knowledgeApi.create({
           title: file.name,
           content_type: contentTypeForFile(file.name),
@@ -166,6 +295,72 @@ export default function KnowledgePage() {
     chunks: assets.reduce((s, a) => s + a.chunks, 0),
     storage_bytes: (data?.items ?? []).reduce((s, a) => s + (a.file_size ?? 0), 0),
   };
+
+  // Build panel tabs for the selected asset
+  const panelTabs = useMemo(() => {
+    const active = panel.active;
+    if (!active) return [];
+    return [
+      {
+        id: "content",
+        label: "Content",
+        content: (
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-3">
+              Topic tree
+            </p>
+            <TopicTree nodes={active.topics} />
+          </div>
+        ),
+      },
+      {
+        id: "sources",
+        label: "Sources",
+        content: (
+          <div className="space-y-5">
+            <Field label="File name" value={active.name} />
+            <div className="grid grid-cols-2 gap-5">
+              <Field label="Type" value={<Tag tone="indigo">{active.type}</Tag>} />
+              <Field label="Size" value={active.size} />
+            </div>
+            <Field label="Status" value={<StatusBadge status={active.status} size="sm" />} />
+            <Field
+              label="Uploaded"
+              value={active.uploaded ? new Date(active.uploaded).toLocaleString() : "—"}
+            />
+            <Field
+              label="Storage path"
+              value={
+                <span className="font-mono text-[12px] break-all">
+                  {active.storagePath ?? "—"}
+                </span>
+              }
+            />
+            <Field label="ID" value={<span className="font-mono text-[12px]">{active.id}</span>} />
+          </div>
+        ),
+      },
+      {
+        id: "keywords",
+        label: "Keywords",
+        content: (
+          <div>
+            {active.keywords.length > 0 ? (
+              <span className="flex flex-wrap gap-1.5">
+                {active.keywords.map((k) => (
+                  <Tag key={k} tone="neutral">{k}</Tag>
+                ))}
+              </span>
+            ) : (
+              <p className="text-[12.5px] text-stone-400 dark:text-stone-500 italic">
+                No keywords extracted yet.
+              </p>
+            )}
+          </div>
+        ),
+      },
+    ];
+  }, [panel.active]);
 
   return (
     <div>
@@ -211,7 +406,12 @@ export default function KnowledgePage() {
                 <li
                   key={a.id}
                   onClick={() => panel.openWith(a)}
-                  className="group flex items-center gap-3.5 px-5 py-3.5 border-b border-stone-100 dark:border-white/[0.04] last:border-0 cursor-pointer hover:bg-stone-50/70 dark:hover:bg-white/[0.02] transition"
+                  className={cn(
+                    "group flex items-center gap-3.5 px-5 py-3.5 border-b border-stone-100 dark:border-white/[0.04] last:border-0 cursor-pointer transition",
+                    panel.open && panel.active?.id === a.id
+                      ? "bg-indigo-50/60 dark:bg-indigo-500/[0.06]"
+                      : "hover:bg-stone-50/70 dark:hover:bg-white/[0.02]",
+                  )}
                 >
                   <span className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 relative", typeStyle(a.type))}>
                     <FileText size={18} />
@@ -228,6 +428,12 @@ export default function KnowledgePage() {
                       {a.status === "failed" && <span className="text-rose-600 dark:text-rose-400"> · parse error</span>}
                     </p>
                   </div>
+                  {/* topic count badge */}
+                  {a.topics.length > 0 && (
+                    <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-medium bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300 shrink-0">
+                      {a.topics.length} topics
+                    </span>
+                  )}
                   <StatusBadge status={a.status} size="sm" />
                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
                     {a.status === "failed" && (
@@ -294,67 +500,7 @@ export default function KnowledgePage() {
         onClose={panel.close}
         title={panel.active?.name ?? "Source"}
         subtitle={panel.active ? `${panel.active.type} · ${panel.active.size}` : undefined}
-        tabs={
-          panel.active
-            ? [
-                {
-                  id: "view",
-                  label: "View",
-                  content: (
-                    <div className="space-y-5">
-                      <Field label="Title" value={panel.active.name} />
-                      <div className="grid grid-cols-2 gap-5">
-                        <Field label="Type" value={<Tag tone="indigo">{panel.active.type}</Tag>} />
-                        <Field label="Size" value={panel.active.size} />
-                      </div>
-                      <Field label="Status" value={<StatusBadge status={panel.active.status} size="sm" />} />
-                      {panel.active.topics.length > 0 && (
-                        <Field
-                          label="Extracted topics"
-                          value={
-                            <span className="flex flex-wrap gap-1.5">
-                              {panel.active.topics.map((t) => (
-                                <Tag key={t} tone="violet">{t}</Tag>
-                              ))}
-                            </span>
-                          }
-                        />
-                      )}
-                      {panel.active.keywords.length > 0 && (
-                        <Field
-                          label="Keywords"
-                          value={
-                            <span className="flex flex-wrap gap-1.5">
-                              {panel.active.keywords.map((k) => (
-                                <Tag key={k} tone="neutral">{k}</Tag>
-                              ))}
-                            </span>
-                          }
-                        />
-                      )}
-                    </div>
-                  ),
-                },
-                {
-                  id: "properties",
-                  label: "Properties",
-                  content: (
-                    <div className="space-y-5">
-                      <Field label="ID" value={<span className="font-mono text-[12px]">{panel.active.id}</span>} />
-                      <Field
-                        label="Created"
-                        value={panel.active.uploaded ? new Date(panel.active.uploaded).toLocaleString() : "—"}
-                      />
-                      <Field
-                        label="Storage path"
-                        value={<span className="font-mono text-[12px] break-all">{panel.active.storagePath ?? "—"}</span>}
-                      />
-                    </div>
-                  ),
-                },
-              ]
-            : []
-        }
+        tabs={panelTabs}
       />
     </div>
   );
