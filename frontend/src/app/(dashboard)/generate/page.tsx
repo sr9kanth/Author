@@ -8,9 +8,9 @@ import { Tag } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { INPUT_CLS } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { frameworksApi, generationApi, orchestrationApi } from "@/lib/api";
+import { frameworksApi, generationApi, knowledgeApi, orchestrationApi } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
-import { Sparkles, ChevronDown, Check, ClipboardCheck, CheckCircle, AlertCircle } from "lucide-react";
+import { Sparkles, ChevronDown, Check, ClipboardCheck, CheckCircle, AlertCircle, Database, X } from "lucide-react";
 
 const ITEM_TYPES = ["Multiple Choice", "Short Answer", "True / False", "Numeric Response", "Extended Response"];
 const DIFFICULTY = ["Easy", "Medium", "Hard"];
@@ -47,6 +47,16 @@ export default function GeneratePage() {
 
   const { data: modelData } = useAsync(() => orchestrationApi.listModels(), []);
   const MODELS = useMemo(() => modelData ?? [], [modelData]);
+
+  const { data: kData } = useAsync(() => knowledgeApi.list(0, 200), []);
+  const ASSETS = useMemo(
+    () => (kData?.items ?? []).filter((a) => a.status === "processed").map((a) => ({ id: a.id, name: a.title })),
+    [kData],
+  );
+
+  const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
+  const toggleAsset = (id: string) =>
+    setSelectedAssets((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
 
   const [framework, setFramework] = useState("");
   const [aiModel, setAiModel] = useState("");
@@ -97,6 +107,7 @@ export default function GeneratePage() {
         cognitive_levels: bloom.length ? Object.fromEntries(bloom.map((b) => [b.toLowerCase(), 2])) : undefined,
         reading_level: "intermediate",
         instructions: instructions.trim() || undefined,
+        knowledge_asset_ids: selectedAssets.length ? selectedAssets : undefined,
         ai_model: selectedModel?.id,
         ai_provider: selectedModel?.provider,
       });
@@ -163,6 +174,63 @@ export default function GeneratePage() {
                 </select>
                 <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
               </div>
+            </Field>
+
+            <Field
+              label="Knowledge sources"
+              hint={
+                ASSETS.length === 0
+                  ? "No indexed documents yet — upload files on the Knowledge page first."
+                  : selectedAssets.length === 0
+                  ? "No sources selected — questions will be generated without grounding material."
+                  : undefined
+              }
+            >
+              {ASSETS.length === 0 ? (
+                <a href="/knowledge" className="inline-flex items-center gap-1.5 text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+                  <Database size={14} /> Go to Knowledge page →
+                </a>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    {ASSETS.map((a) => {
+                      const on = selectedAssets.includes(a.id);
+                      return (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => toggleAsset(a.id)}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] border transition",
+                            on
+                              ? "border-indigo-400 bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-200 font-medium"
+                              : "border-stone-200 dark:border-white/10 text-stone-500 dark:text-stone-400 hover:border-stone-300 dark:hover:border-white/20",
+                          )}
+                        >
+                          <Database size={12} className="shrink-0" />
+                          {a.name.length > 32 ? a.name.slice(0, 30) + "…" : a.name}
+                          {on && <X size={12} className="shrink-0 ml-0.5 opacity-60" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {selectedAssets.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAssets([])}
+                      className="text-[12px] text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </div>
+              )}
+              {selectedAssets.length === 0 && ASSETS.length > 0 && (
+                <p className="mt-2 text-[12px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                  <AlertCircle size={12} className="shrink-0" />
+                  Without a source selected, the AI generates from general knowledge only — not your documents.
+                </p>
+              )}
             </Field>
 
             <Field label="AI model" hint="Select the model to use for generation. Ollama models run locally.">
@@ -249,7 +317,25 @@ export default function GeneratePage() {
           <div className={cn(CARD, "p-5 sticky top-20")}>
             <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-4">Job summary</h3>
             <dl className="space-y-3 text-[13px]">
-              <div className="flex justify-between gap-3"><dt className="text-stone-500 dark:text-stone-400">Framework</dt><dd className="font-medium text-stone-900 dark:text-white text-right">{fw?.name ?? "—"}</dd></div>
+              <div className="flex justify-between gap-3"><dt className="text-stone-500 dark:text-stone-400">Framework</dt><dd className="font-medium text-stone-900 dark:text-white text-right">{fw?.name ?? <span className="text-stone-400 font-normal italic">none</span>}</dd></div>
+              <div className="flex flex-col gap-1">
+                <dt className="text-stone-500 dark:text-stone-400">Sources</dt>
+                {selectedAssets.length === 0 ? (
+                  <dd className="text-amber-600 dark:text-amber-400 text-[12px] italic">None — general knowledge only</dd>
+                ) : (
+                  <dd className="space-y-0.5">
+                    {selectedAssets.map((id) => {
+                      const a = ASSETS.find((x) => x.id === id);
+                      return (
+                        <div key={id} className="flex items-center gap-1 text-[12px] text-stone-700 dark:text-stone-300">
+                          <Database size={11} className="shrink-0 text-indigo-400" />
+                          <span className="truncate">{a?.name ?? id}</span>
+                        </div>
+                      );
+                    })}
+                  </dd>
+                )}
+              </div>
               <div className="flex justify-between"><dt className="text-stone-500 dark:text-stone-400">Type</dt><dd className="font-medium text-stone-900 dark:text-white">{type}</dd></div>
               <div className="flex justify-between"><dt className="text-stone-500 dark:text-stone-400">Items</dt><dd className="font-medium text-stone-900 dark:text-white tabular-nums">{count}</dd></div>
               <div className="flex justify-between gap-3"><dt className="text-stone-500 dark:text-stone-400">Difficulty</dt><dd className="font-medium text-stone-900 dark:text-white text-right">{Object.keys(difficulty).filter((k) => difficulty[k]).join(", ") || "—"}</dd></div>

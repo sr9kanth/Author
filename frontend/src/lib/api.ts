@@ -185,6 +185,13 @@ export const generationApi = {
   getJob: (id: string) => request<GenerationJob>(`/generation/jobs/${id}`),
   createJob: (data: {
     configuration_id?: string;
+    framework_id?: string;
+    question_count?: number;
+    question_types?: string[];
+    difficulty_levels?: Record<string, number>;
+    cognitive_levels?: Record<string, number>;
+    reading_level?: string;
+    instructions?: string;
     knowledge_asset_ids?: string[];
     ai_provider?: string;
     ai_model?: string;
