@@ -11,8 +11,10 @@ import {
   Layers, FileText, ClipboardCheck, CheckCircle,
   TrendingUp, Upload, Sparkles, Package, ArrowRight,
   CheckCircle2, AlertCircle, Activity as ActivityIcon,
+  ChevronRight,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import type { PipelineStage } from "@/types";
 
 function activityVisual(kind: string): { Icon: LucideIcon; tint: string } {
   const k = kind.toLowerCase();
@@ -42,9 +44,9 @@ const PALETTE = ["#6366f1", "#8b5cf6", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444
 
 type Segment = { label: string; count: number; color: string };
 
-function Donut({ segments, size = 132 }: { segments: Segment[]; size?: number }) {
+function Donut({ segments, size = 120 }: { segments: Segment[]; size?: number }) {
   const total = segments.reduce((s, seg) => s + seg.count, 0);
-  const stroke = 16;
+  const stroke = 18;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   let offset = 0;
@@ -75,10 +77,10 @@ function Donut({ segments, size = 132 }: { segments: Segment[]; size?: number })
           return el;
         })}
       </svg>
-      <ul className="space-y-1.5 min-w-0">
+      <ul className="space-y-1.5 min-w-0 flex-1">
         {segments.map((seg, i) => (
-          <li key={i} className="flex items-center gap-2 text-[12.5px]">
-            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: seg.color }} />
+          <li key={i} className="flex items-center gap-2 text-[12px]">
+            <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: seg.color }} />
             <span className="text-stone-600 dark:text-stone-300 truncate capitalize">{seg.label.replace(/_/g, " ")}</span>
             <span className="ml-auto font-semibold text-stone-900 dark:text-white tabular-nums">{seg.count}</span>
           </li>
@@ -88,33 +90,47 @@ function Donut({ segments, size = 132 }: { segments: Segment[]; size?: number })
   );
 }
 
-function Funnel({ stages }: { stages: { name: string; count: number }[] }) {
-  const max = Math.max(1, ...stages.map((s) => s.count));
+function toSegments(slices: { label: string; count: number }[], maxSlices = 4): Segment[] {
+  const sorted = [...slices].sort((a, b) => b.count - a.count);
+  if (sorted.length <= maxSlices) {
+    return sorted.map((s, i) => ({ ...s, color: PALETTE[i % PALETTE.length] }));
+  }
+  const top = sorted.slice(0, maxSlices);
+  const otherCount = sorted.slice(maxSlices).reduce((acc, s) => acc + s.count, 0);
+  return [
+    ...top.map((s, i) => ({ ...s, color: PALETTE[i % PALETTE.length] })),
+    { label: "Other", count: otherCount, color: "#94a3b8" },
+  ];
+}
+
+function stageMeta(key: string): { bg: string; text: string; dot: string } {
+  if (key === "accepted") return { bg: "bg-indigo-50 dark:bg-indigo-500/10", text: "text-indigo-700 dark:text-indigo-300", dot: "bg-indigo-500" };
+  if (key === "rejected") return { bg: "bg-rose-50 dark:bg-rose-500/10", text: "text-rose-700 dark:text-rose-300", dot: "bg-rose-500" };
+  return { bg: "bg-stone-50 dark:bg-white/[0.04]", text: "text-stone-700 dark:text-stone-300", dot: "bg-stone-400 dark:bg-stone-500" };
+}
+
+function PipelineFunnelStrip({ stages }: { stages: PipelineStage[] }) {
+  if (!stages.length) return null;
   return (
-    <div className="space-y-2">
-      {stages.map((s, i) => {
-        const pct = (s.count / max) * 100;
+    <div className="flex items-stretch gap-0 overflow-x-auto pb-1">
+      {stages.map((stage, i) => {
+        const meta = stageMeta(stage.key);
+        const isLast = i === stages.length - 1;
         return (
-          <div key={s.name} className="flex items-center gap-3">
-            <span className="w-24 shrink-0 text-[12px] text-stone-500 dark:text-stone-400 text-right">{s.name}</span>
-            <div className="flex-1 h-7 rounded-md bg-stone-100 dark:bg-white/[0.05] overflow-hidden">
-              <div
-                className="h-full rounded-md bg-gradient-to-r from-indigo-500 to-violet-400 flex items-center justify-end px-2 transition-all"
-                style={{ width: `${Math.max(pct, s.count > 0 ? 6 : 0)}%`, opacity: 1 - i * 0.08 }}
-              >
-                {pct > 18 && <span className="text-[11px] font-semibold text-white tabular-nums">{s.count}</span>}
-              </div>
+          <div key={stage.key} className="flex items-center min-w-0">
+            <div className={cn("flex flex-col items-center justify-center px-4 py-3 rounded-lg min-w-[90px]", meta.bg)}>
+              <span className={cn("text-xl font-bold tabular-nums", meta.text)}>{stage.count.toLocaleString()}</span>
+              <span className="text-[11px] font-medium text-stone-500 dark:text-stone-400 mt-0.5 whitespace-nowrap">{stage.label}</span>
+              <span className={cn("w-1.5 h-1.5 rounded-full mt-1.5", meta.dot)} />
             </div>
-            {pct <= 18 && <span className="w-8 text-[11px] font-semibold text-stone-700 dark:text-stone-200 tabular-nums">{s.count}</span>}
+            {!isLast && (
+              <ChevronRight size={16} className="shrink-0 mx-1 text-stone-300 dark:text-stone-600" />
+            )}
           </div>
         );
       })}
     </div>
   );
-}
-
-function toSegments(slices: { label: string; count: number }[]): Segment[] {
-  return slices.map((s, i) => ({ ...s, color: PALETTE[i % PALETTE.length] }));
 }
 
 export default function DashboardPage() {
@@ -126,11 +142,11 @@ export default function DashboardPage() {
 
   const activityItems = activity?.items ?? [];
 
-  const funnel = analytics?.funnel ?? [];
+  const pipeline = analytics?.pipeline ?? [];
   const byStatus = analytics?.by_status ?? [];
   const byType = analytics?.by_type ?? [];
   const byDifficulty = analytics?.by_difficulty ?? [];
-  const hasAnalytics = byStatus.some((s) => s.count > 0) || funnel.some((s) => s.count > 0);
+  const hasAnalytics = byStatus.some((s) => s.count > 0) || pipeline.some((s) => s.count > 0);
 
   const quickActions = [
     { icon: Layers, accent: "from-indigo-500 to-indigo-600", title: "New framework", desc: "Define outcomes & competencies", href: "/frameworks" },
@@ -147,7 +163,7 @@ export default function DashboardPage() {
       generated_at: new Date().toISOString(),
       stats: stats ?? null,
       analytics: {
-        funnel,
+        pipeline,
         by_status: byStatus,
         by_type: byType,
         by_difficulty: byDifficulty,
@@ -175,6 +191,7 @@ export default function DashboardPage() {
         <Button Icon={Sparkles} onClick={() => router.push("/generate")}>New generation</Button>
       </PageHeader>
 
+      {/* Stats cards */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <StatsCard Icon={Layers} accent="indigo" label="Active frameworks" value={statsLoading ? "—" : (stats?.active_frameworks ?? 0).toLocaleString()} />
         <StatsCard Icon={FileText} accent="violet" label="Items generated" value={statsLoading ? "—" : (stats?.items_generated ?? 0).toLocaleString()} />
@@ -182,61 +199,46 @@ export default function DashboardPage() {
         <StatsCard Icon={CheckCircle} accent="emerald" label="Approval rate" value={statsLoading ? "—" : `${Math.round(stats?.approval_rate ?? 0)}%`} />
       </div>
 
+      {/* Pipeline funnel strip */}
+      <div className={cn(CARD, "p-5 mb-6")}>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-stone-900 dark:text-white">Content pipeline</h3>
+            <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">Items by stage across the generation workflow</p>
+          </div>
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+            <TrendingUp size={14} /> Pipeline
+          </span>
+        </div>
+        {analyticsLoading ? (
+          <p className="text-[13px] text-stone-400 dark:text-stone-500 py-4">Loading analytics…</p>
+        ) : !hasAnalytics ? (
+          <EmptyState Icon={TrendingUp} title="No content yet" subtext="Generate items to see your pipeline analytics." />
+        ) : (
+          <PipelineFunnelStrip stages={pipeline} />
+        )}
+      </div>
+
+      {/* Donut charts */}
+      {!analyticsLoading && hasAnalytics && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className={cn(CARD, "p-5")}>
+            <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-4">By status</h3>
+            {byStatus.length ? <Donut segments={toSegments(byStatus)} /> : <p className="text-[13px] text-stone-400 dark:text-stone-500">No data</p>}
+          </div>
+          <div className={cn(CARD, "p-5")}>
+            <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-4">By type</h3>
+            {byType.length ? <Donut segments={toSegments(byType)} /> : <p className="text-[13px] text-stone-400 dark:text-stone-500">No data</p>}
+          </div>
+          <div className={cn(CARD, "p-5")}>
+            <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-4">By difficulty</h3>
+            {byDifficulty.length ? <Donut segments={toSegments(byDifficulty)} /> : <p className="text-[13px] text-stone-400 dark:text-stone-500">No data</p>}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 space-y-6">
-          <div className={cn(CARD, "p-5")}>
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h3 className="text-sm font-semibold text-stone-900 dark:text-white">Content pipeline</h3>
-                <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">Items by stage across the generation workflow</p>
-              </div>
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
-                <TrendingUp size={14} /> Pipeline
-              </span>
-            </div>
-            {analyticsLoading ? (
-              <p className="text-[13px] text-stone-400 dark:text-stone-500 py-6">Loading analytics…</p>
-            ) : !hasAnalytics ? (
-              <EmptyState Icon={TrendingUp} title="No content yet" subtext="Generate items to see your pipeline analytics." />
-            ) : (
-              <Funnel stages={funnel} />
-            )}
-          </div>
-
-          {!analyticsLoading && hasAnalytics && (
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className={cn(CARD, "p-5")}>
-                <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-4">By status</h3>
-                <Donut segments={toSegments(byStatus)} />
-              </div>
-              <div className={cn(CARD, "p-5")}>
-                <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-4">By type</h3>
-                {byType.length ? <Donut segments={toSegments(byType)} /> : <p className="text-[13px] text-stone-400 dark:text-stone-500">No data</p>}
-              </div>
-              <div className={cn(CARD, "p-5 sm:col-span-2")}>
-                <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-4">By difficulty</h3>
-                {byDifficulty.length ? (
-                  <ul className="space-y-2">
-                    {toSegments(byDifficulty).map((seg, i) => {
-                      const total = byDifficulty.reduce((s, d) => s + d.count, 0) || 1;
-                      return (
-                        <li key={i} className="flex items-center gap-3">
-                          <span className="w-24 shrink-0 text-[12.5px] text-stone-600 dark:text-stone-300 capitalize truncate">{seg.label.replace(/_/g, " ")}</span>
-                          <div className="flex-1 h-2.5 rounded-full bg-stone-100 dark:bg-white/[0.06] overflow-hidden">
-                            <div className="h-full rounded-full" style={{ width: `${(seg.count / total) * 100}%`, background: seg.color }} />
-                          </div>
-                          <span className="w-8 text-right text-[12.5px] font-semibold text-stone-900 dark:text-white tabular-nums">{seg.count}</span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : (
-                  <p className="text-[13px] text-stone-400 dark:text-stone-500">No data</p>
-                )}
-              </div>
-            </div>
-          )}
-
           <div>
             <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-3">Quick actions</h3>
             <div className="grid sm:grid-cols-2 gap-3">

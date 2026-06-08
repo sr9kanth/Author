@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { knowledgeApi } from "@/lib/api";
 import {
   LayoutDashboard, Layers, Database, Sparkles, ClipboardCheck,
-  Library, Package, LogOut, CheckSquare, Settings, Tag, BookOpen,
+  Library, Package, LogOut, CheckSquare, Settings, Tag, BookOpen, FileCode,
 } from "lucide-react";
 
 const NAV = [

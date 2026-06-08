@@ -154,6 +154,8 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 const BLOOM_LEVELS = ["all", "Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"];
+const DIFFICULTY_LEVELS = ["all", "Easy", "Medium", "Hard"];
+const QUESTION_TYPES = ["all", "Multiple Choice", "Short Answer", "True-False", "Essay"];
 
 function diffTone(d: string) {
   return d === "Easy" ? "text-emerald-600 dark:text-emerald-400" : d === "Medium" ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400";
@@ -163,6 +165,8 @@ export default function RepositoryPage() {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [bloom, setBloom] = useState("all");
+  const [difficulty, setDifficulty] = useState("all");
+  const [questionType, setQuestionType] = useState("all");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [showImport, setShowImport] = useState(false);
   const panel = useDetailPanel<RepoRow>();
@@ -190,8 +194,23 @@ export default function RepositoryPage() {
     const q = query.trim().toLowerCase();
     const mq = !q || r.stem.toLowerCase().includes(q) || r.topic.toLowerCase().includes(q) || r.type.toLowerCase().includes(q);
     const mb = bloom === "all" || r.bloom === bloom;
-    return mq && mb;
+    const md = difficulty === "all" || r.difficulty.toLowerCase() === difficulty.toLowerCase();
+    const mt = questionType === "all" || r.type.toLowerCase().replace(/_/g, " ") === questionType.toLowerCase();
+    return mq && mb && md && mt;
   });
+
+  const hasActiveFilters = query.trim() !== "" || bloom !== "all" || difficulty !== "all" || questionType !== "all";
+
+  function clearFilters() {
+    setQuery("");
+    setBloom("all");
+    setDifficulty("all");
+    setQuestionType("all");
+  }
+
+  function exportQti() {
+    window.location.href = repositoryApi.exportQti();
+  }
 
   const isEmpty = !loading && repository.length === 0;
 
@@ -235,31 +254,65 @@ export default function RepositoryPage() {
         description="Your approved, reusable assessment items. Search and filter the bank, then send items to Assembly."
       >
         <Button variant="secondary" Icon={Upload} onClick={() => setShowImport(true)}>Import</Button>
-        <Button variant="secondary" Icon={Download} onClick={exportCsv} disabled={rows.length === 0}>Export</Button>
+        <Button variant="secondary" Icon={Download} onClick={exportCsv} disabled={rows.length === 0}>Export CSV</Button>
+        <Button variant="secondary" Icon={Download} onClick={exportQti}>Export QTI</Button>
         <Button Icon={Package} onClick={() => router.push("/assembly")}>Build package</Button>
       </PageHeader>
 
-      <div className="flex flex-col lg:flex-row lg:items-center gap-3 mb-5">
-        <SearchInput value={query} onChange={setQuery} placeholder="Search by stem, topic or framework…" className="lg:w-96" />
-        <div className="flex-1" />
-        <div className="flex items-center gap-3">
-          <Segmented
-            size="sm"
-            options={BLOOM_LEVELS.slice(0, 5).map((b) => ({ value: b, label: b === "all" ? "All levels" : b }))}
-            value={bloom}
-            onChange={setBloom}
-          />
-          <div className="hidden sm:flex items-center gap-0.5 rounded-xl p-0.5 bg-stone-100 dark:bg-white/[0.05] border border-stone-200/70 dark:border-white/[0.06]">
-            {(["grid", "list"] as const).map((v) => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                className={cn("w-8 h-7 inline-flex items-center justify-center rounded-lg transition", view === v ? "bg-white dark:bg-white/[0.10] text-stone-900 dark:text-white shadow-sm" : "text-stone-400 hover:text-stone-700 dark:hover:text-stone-200")}
-              >
-                {v === "grid" ? <LayoutDashboard size={15} /> : <SlidersHorizontal size={15} />}
-              </button>
-            ))}
+      <div className="flex flex-col gap-3 mb-5">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+          <SearchInput value={query} onChange={setQuery} placeholder="Search by stem, topic or framework…" className="lg:w-96" />
+          <div className="flex-1" />
+          <div className="flex items-center gap-3">
+            <Segmented
+              size="sm"
+              options={BLOOM_LEVELS.slice(0, 5).map((b) => ({ value: b, label: b === "all" ? "All levels" : b }))}
+              value={bloom}
+              onChange={setBloom}
+            />
+            <div className="hidden sm:flex items-center gap-0.5 rounded-xl p-0.5 bg-stone-100 dark:bg-white/[0.05] border border-stone-200/70 dark:border-white/[0.06]">
+              {(["grid", "list"] as const).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  className={cn("w-8 h-7 inline-flex items-center justify-center rounded-lg transition", view === v ? "bg-white dark:bg-white/[0.10] text-stone-900 dark:text-white shadow-sm" : "text-stone-400 hover:text-stone-700 dark:hover:text-stone-200")}
+                >
+                  {v === "grid" ? <LayoutDashboard size={15} /> : <SlidersHorizontal size={15} />}
+                </button>
+              ))}
+            </div>
           </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={difficulty}
+            onChange={(e) => setDifficulty(e.target.value)}
+            className="text-[12.5px] rounded-lg border border-stone-200 dark:border-white/[0.08] bg-white dark:bg-white/[0.04] text-stone-700 dark:text-stone-300 px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+          >
+            {DIFFICULTY_LEVELS.map((d) => (
+              <option key={d} value={d}>{d === "all" ? "All difficulties" : d}</option>
+            ))}
+          </select>
+          <select
+            value={questionType}
+            onChange={(e) => setQuestionType(e.target.value)}
+            className="text-[12.5px] rounded-lg border border-stone-200 dark:border-white/[0.08] bg-white dark:bg-white/[0.04] text-stone-700 dark:text-stone-300 px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+          >
+            {QUESTION_TYPES.map((t) => (
+              <option key={t} value={t}>{t === "all" ? "All types" : t}</option>
+            ))}
+          </select>
+          <span className="text-[12px] text-stone-400 dark:text-stone-500 ml-1">
+            {rows.length} result{rows.length !== 1 ? "s" : ""}
+          </span>
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="text-[12px] text-indigo-600 dark:text-indigo-400 hover:underline ml-1"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
       </div>
 
@@ -278,7 +331,7 @@ export default function RepositoryPage() {
       ) : rows.length === 0 ? (
         <div className={CARD}>
           <EmptyState Icon={Search} title="No items match" subtext="Try a different search term or clear the level filter."
-            action={<Button variant="secondary" onClick={() => { setQuery(""); setBloom("all"); }}>Clear filters</Button>} />
+            action={<Button variant="secondary" onClick={clearFilters}>Clear filters</Button>} />
         </div>
       ) : view === "grid" ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -325,7 +378,7 @@ export default function RepositoryPage() {
 
       {rows.length > 0 && (
         <p className="mt-4 text-xs text-stone-400 dark:text-stone-500">
-          {rows.length} approved items{bloom !== "all" ? ` · ${bloom}` : ""}
+          {rows.length} approved item{rows.length !== 1 ? "s" : ""}{bloom !== "all" ? ` · ${bloom}` : ""}{difficulty !== "all" ? ` · ${difficulty}` : ""}{questionType !== "all" ? ` · ${questionType}` : ""}
         </p>
       )}
 

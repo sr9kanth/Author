@@ -52,10 +52,23 @@ from app.modules.metadata.router import router as metadata_router
 from app.modules.audit.router import router as audit_router
 from app.modules.settings.router import router as settings_router
 from app.modules.generation.stimuli_router import router as stimuli_router
+from app.modules.prompts.router import router as prompts_router
+
+# Thin router that exposes GET /api/v1/users (user list for reviewer assignment dropdown)
+from fastapi import APIRouter as _APIRouter
+from app.core.deps import CurrentUserID as _CurrentUserID, DBSession as _DBSession
+from app.modules.auth.service import AuthService as _AuthService
+
+_users_router = _APIRouter(prefix="/users", tags=["users"])
+
+@_users_router.get("")
+async def list_users_root(current_user_id: _CurrentUserID, db: _DBSession, skip: int = 0, limit: int = 100) -> dict:
+    return await _AuthService(db).list_users(skip=skip, limit=limit)
 
 API_PREFIX = "/api/v1"
 
 app.include_router(auth_router, prefix=API_PREFIX)
+app.include_router(_users_router, prefix=API_PREFIX)
 app.include_router(knowledge_router, prefix=API_PREFIX)
 app.include_router(frameworks_router, prefix=API_PREFIX)
 app.include_router(assessment_config_router, prefix=API_PREFIX)
@@ -71,6 +84,7 @@ app.include_router(metadata_router, prefix=API_PREFIX)
 app.include_router(audit_router, prefix=API_PREFIX)
 app.include_router(settings_router, prefix=API_PREFIX)
 app.include_router(stimuli_router, prefix=API_PREFIX)
+app.include_router(prompts_router, prefix=API_PREFIX)
 
 
 @app.get("/health", tags=["health"])

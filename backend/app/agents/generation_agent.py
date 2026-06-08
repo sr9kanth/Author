@@ -77,7 +77,23 @@ class GenerationAgent(BaseAgent):
         language = context.get("language", "en")
         framework_context = context.get("framework_context", "")
 
-        user_prompt = QUESTION_GENERATION_USER_TEMPLATE.format(
+        # Try to load active generation prompt template from DB; fall back to hardcoded on any failure
+        active_system_prompt: str | None = None
+        active_user_template: str | None = None
+        try:
+            db = context.get("db")
+            if db is not None:
+                from app.modules.prompts.service import PromptTemplateService
+                pt_service = PromptTemplateService(db)
+                active_pt = await pt_service.get_active_template("generation")
+                if active_pt is not None:
+                    active_system_prompt = active_pt.system_prompt
+                    active_user_template = active_pt.user_template
+        except Exception:
+            pass
+
+        user_template = active_user_template if active_user_template else QUESTION_GENERATION_USER_TEMPLATE
+        user_prompt = user_template.format(
             question_count=question_count,
             question_type=question_type,
             difficulty_levels=json.dumps(difficulty_levels),
@@ -89,7 +105,12 @@ class GenerationAgent(BaseAgent):
             knowledge_content=knowledge_content[:6000],
         )
 
-        system_prompt = build_system_prompt(context.get("guide_text"))
+        if active_system_prompt:
+            system_prompt = active_system_prompt
+            if context.get("guide_text") and context["guide_text"].strip():
+                system_prompt = f"{system_prompt}\n\n## Item Authoring Guide\n{context['guide_text'].strip()}"
+        else:
+            system_prompt = build_system_prompt(context.get("guide_text"))
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},

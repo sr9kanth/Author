@@ -13,6 +13,7 @@ import type {
   KnowledgeAsset,
   MetadataDimension,
   PaginatedList,
+  PromptTemplate,
   ReviewComment,
   Stimulus,
   User,
@@ -328,6 +329,15 @@ export const settingsApi = {
       method: "POST",
       body: JSON.stringify({ provider, api_key }),
     }),
+};
+
+// ---- Prompt Templates ----
+export const promptTemplatesApi = {
+  list: (type?: string) => request<PaginatedList<PromptTemplate>>(`/prompt-templates${type ? `?template_type=${type}` : ""}`),
+  get: (id: string) => request<PromptTemplate>(`/prompt-templates/${id}`),
+  create: (data: Partial<PromptTemplate>) => request<PromptTemplate>("/prompt-templates", { method: "POST", body: JSON.stringify(data) }),
+  activate: (id: string) => request<PromptTemplate>(`/prompt-templates/${id}/activate`, { method: "PATCH" }),
+  getActive: (type: string) => request<PromptTemplate>(`/prompt-templates/active?type=${type}`),
 };
 
 export { ApiError };

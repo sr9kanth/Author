@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, Request, status
+import uuid
+
+from fastapi import APIRouter, HTTPException, Query, Request, status
 
 from app.core.deps import CurrentUserID, DBSession
 from app.modules.audit.service import AuditService
@@ -59,7 +61,38 @@ async def list_contents(job_id: str, db: DBSession, current_user_id: CurrentUser
 @router.patch("/contents/{content_id}", response_model=GeneratedContentRead)
 async def update_content(content_id: str, data: GeneratedContentUpdate, db: DBSession, current_user_id: CurrentUserID) -> GeneratedContentRead:
     service = GenerationService(db)
+    # Separation of duties: authors cannot approve or reject their own questions.
+    if data.status in ("approved", "rejected"):
+        content = await service.get_content_model(content_id)
+        if content is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Content not found")
+        # Determine author: check content's job's created_by
+        job_created_by = str(content.job.created_by) if content.job else None
+        if job_created_by == current_user_id or str(current_user_id) == job_created_by:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Authors cannot approve their own questions",
+            )
     try:
         return await service.update_content(content_id, data)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+@router.get("/contents", response_model=GeneratedContentList)
+async def list_all_contents(
+    db: DBSession,
+    current_user_id: CurrentUserID,
+    assigned_to: str | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
+    skip: int = 0,
+    limit: int = 50,
+) -> GeneratedContentList:
+    service = GenerationService(db)
+    reviewer_id = current_user_id if assigned_to == "me" else assigned_to
+    return await service.list_all_contents(
+        skip=skip,
+        limit=limit,
+        assigned_reviewer_id=reviewer_id,
+        status_filter=status_filter,
+    )

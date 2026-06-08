@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from app.core.config import settings
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.generation.models import ContentStatus, GeneratedContent, GenerationJob, JobStatus
@@ -81,6 +81,42 @@ class GenerationService:
             .offset(skip)
             .limit(limit)
         )
+        contents = result.scalars().all()
+        return GeneratedContentList(
+            items=[GeneratedContentRead.model_validate(c) for c in contents],
+            total=total,
+        )
+
+    async def get_content_model(self, content_id: str) -> GeneratedContent | None:
+        result = await self.db.execute(
+            select(GeneratedContent)
+            .options(joinedload(GeneratedContent.job))
+            .where(GeneratedContent.id == uuid.UUID(content_id))
+        )
+        return result.scalar_one_or_none()
+
+    async def list_all_contents(
+        self,
+        skip: int = 0,
+        limit: int = 50,
+        assigned_reviewer_id: str | None = None,
+        status_filter: str | None = None,
+    ) -> GeneratedContentList:
+        query = select(GeneratedContent).options(selectinload(GeneratedContent.stimulus))
+        count_query = select(func.count(GeneratedContent.id))
+        if assigned_reviewer_id:
+            try:
+                rid = uuid.UUID(assigned_reviewer_id)
+                query = query.where(GeneratedContent.assigned_reviewer_id == rid)
+                count_query = count_query.where(GeneratedContent.assigned_reviewer_id == rid)
+            except ValueError:
+                pass
+        if status_filter:
+            query = query.where(GeneratedContent.status == status_filter)
+            count_query = count_query.where(GeneratedContent.status == status_filter)
+        count_result = await self.db.execute(count_query)
+        total = count_result.scalar_one()
+        result = await self.db.execute(query.offset(skip).limit(limit))
         contents = result.scalars().all()
         return GeneratedContentList(
             items=[GeneratedContentRead.model_validate(c) for c in contents],

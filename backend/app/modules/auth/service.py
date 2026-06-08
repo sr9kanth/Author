@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token, create_refresh_token, decode_token, hash_password, verify_password
@@ -61,6 +61,13 @@ class AuthService:
         if not user:
             raise ValueError("User not found")
         return UserRead.model_validate(user)
+
+    async def list_users(self, skip: int = 0, limit: int = 100) -> dict:
+        count_result = await self.db.execute(select(func.count(User.id)))
+        total = count_result.scalar_one()
+        result = await self.db.execute(select(User).offset(skip).limit(limit))
+        users = result.scalars().all()
+        return {"items": [UserRead.model_validate(u) for u in users], "total": total}
 
     async def update_user(self, user_id: str, data: UserUpdate) -> UserRead:
         result = await self.db.execute(select(User).where(User.id == uuid.UUID(user_id)))

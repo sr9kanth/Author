@@ -299,3 +299,17 @@ export interface AIModel {
   supports_vision?: boolean;
   key_configured: boolean;
 }
+
+export interface PromptTemplate {
+  id: string;
+  name: string;
+  version: string;
+  template_type: string;
+  system_prompt: string;
+  user_template: string;
+  is_active: boolean;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}

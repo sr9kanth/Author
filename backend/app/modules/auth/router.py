@@ -65,3 +65,10 @@ async def update_me(data: UserUpdate, current_user_id: CurrentUserID, db: DBSess
         return await service.update_user(current_user_id, data)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+# Mounted at /api/v1/auth/users but also re-exported at /api/v1/users via main.py users_router
+@router.get("/users", response_model=dict)
+async def list_users(current_user_id: CurrentUserID, db: DBSession, skip: int = 0, limit: int = 100) -> dict:
+    service = AuthService(db)
+    return await service.list_users(skip=skip, limit=limit)

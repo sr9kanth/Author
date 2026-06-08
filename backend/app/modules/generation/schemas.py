@@ -73,6 +73,9 @@ class GeneratedContentRead(BaseModel):
     prompt_version: str
     status: ContentStatus
     validation_score: float | None
+    assigned_reviewer_id: uuid.UUID | None = None
+    reviewed_by_id: uuid.UUID | None = None
+    review_comment: str | None = None
     created_at: datetime
     updated_at: datetime
     stimulus: StimulusRead | None = None
@@ -83,6 +86,9 @@ class GeneratedContentUpdate(BaseModel):
 
     body: str | None = None
     status: ContentStatus | None = None
+    assigned_reviewer_id: uuid.UUID | None = None
+    reviewed_by_id: uuid.UUID | None = None
+    review_comment: str | None = None
 
 
 class GenerationJobList(BaseModel):
