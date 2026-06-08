@@ -21,6 +21,7 @@ const NAV = [
   { key: "repository", label: "Repository", href: "/repository", Icon: Library, section: "Quality" },
   { key: "assembly", label: "Assembly", href: "/assembly", Icon: Package, section: "Delivery" },
   { key: "metadata", label: "Metadata", href: "/metadata", Icon: Tag, section: "System" },
+  { key: "prompts", label: "Prompts", href: "/prompts", Icon: FileCode, section: "System" },
   { key: "settings", label: "Settings", href: "/settings", Icon: Settings, section: "System" },
 ];
 

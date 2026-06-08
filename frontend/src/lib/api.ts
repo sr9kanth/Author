@@ -257,6 +257,11 @@ export const repositoryApi = {
     fd.append("file", file);
     return upload<{ imported: number; errors: string[] }>("/repository/import", fd);
   },
+  exportQti: (params?: { job_id?: string; framework_id?: string }): string => {
+    const qs = params ? new URLSearchParams(params as Record<string, string>).toString() : "";
+    return `${API_PREFIX}/repository/export/qti${qs ? "?" + qs : ""}`;
+    // caller uses: window.location.href = repositoryApi.exportQti(...)
+  },
 };
 
 // ---- Workflow ----
