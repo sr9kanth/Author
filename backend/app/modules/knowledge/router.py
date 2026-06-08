@@ -1,9 +1,14 @@
+import json
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Request, UploadFile, status
+from pydantic import BaseModel
 
 from app.core.deps import CurrentUserID, DBSession
 from app.modules.audit.service import AuditService
 from app.modules.knowledge.schemas import KnowledgeAssetCreate, KnowledgeAssetList, KnowledgeAssetRead, KnowledgeAssetUpdate
 from app.modules.knowledge.service import KnowledgeService
+from app.modules.orchestration.service import AIOrchestrationService
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
@@ -74,6 +79,93 @@ async def update_asset(asset_id: str, data: KnowledgeAssetUpdate, db: DBSession,
         return await service.update_asset(asset_id, data)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+class ConceptGraph(BaseModel):
+    nodes: list[dict[str, Any]]
+    edges: list[dict[str, Any]]
+
+
+@router.get("/{asset_id}/graph", response_model=ConceptGraph)
+async def get_graph(asset_id: str, db: DBSession, current_user_id: CurrentUserID) -> ConceptGraph:
+    service = KnowledgeService(db)
+    try:
+        asset = await service.get_asset(asset_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    if not asset.content_graph:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Graph not generated yet")
+    return asset.content_graph  # type: ignore[return-value]
+
+
+@router.post("/{asset_id}/graph", response_model=ConceptGraph)
+async def generate_graph(asset_id: str, db: DBSession, current_user_id: CurrentUserID) -> ConceptGraph:
+    service = KnowledgeService(db)
+    try:
+        asset = await service.get_asset(asset_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+    # Gather source material
+    topics = asset.extracted_topics or []
+    concepts = asset.extracted_concepts or []
+    outcomes = asset.extracted_outcomes or []
+    keywords = asset.keywords or []
+
+    prompt = f"""You are an expert knowledge graph builder.
+Given the following extracted knowledge elements from a document, identify meaningful relationships between them and return ONLY a valid JSON object (no markdown, no explanation).
+
+Topics: {json.dumps(topics)}
+Concepts: {json.dumps(concepts)}
+Outcomes: {json.dumps(outcomes)}
+Keywords: {json.dumps(keywords)}
+
+Return a JSON object with this exact shape:
+{{
+  "nodes": [
+    {{"id": "<short_unique_id>", "label": "<concept name>", "type": "topic|concept|outcome|keyword", "weight": <1-5>}}
+  ],
+  "edges": [
+    {{"source": "<node_id>", "target": "<node_id>", "label": "relates_to|prerequisite|supports|contradicts", "weight": <0.1-1.0>}}
+  ]
+}}
+
+Rules:
+- Include 5–30 nodes drawn from topics, concepts, outcomes, and keywords.
+- Add edges only where a genuine relationship exists.
+- Node id must be a short alphanumeric slug (no spaces).
+- Return ONLY the JSON object, nothing else."""
+
+    ai = AIOrchestrationService()
+    raw = await ai.complete([{"role": "user", "content": prompt}])
+
+    # Strip possible markdown fences
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+
+    try:
+        graph = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI returned invalid JSON: {exc}",
+        )
+
+    # Persist into DB
+    from sqlalchemy import text as sql_text
+    await db.execute(
+        sql_text(
+            "UPDATE knowledge_assets SET content_graph = :graph WHERE id = :id"
+        ),
+        {"graph": json.dumps(graph), "id": str(asset_id)},
+    )
+    await db.commit()
+
+    return graph  # type: ignore[return-value]
 
 
 @router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)

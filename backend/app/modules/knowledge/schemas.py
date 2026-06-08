@@ -30,6 +30,7 @@ class KnowledgeAssetRead(BaseModel):
     extracted_concepts: list | dict | None
     extracted_outcomes: list | dict | None
     keywords: list | None
+    content_graph: dict | None = None
     status: AssetStatus
     created_by: uuid.UUID
     created_at: datetime

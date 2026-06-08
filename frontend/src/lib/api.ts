@@ -4,6 +4,7 @@ import type {
   AssessmentConfiguration,
   AssessmentItem,
   AssessmentPackage,
+  Blueprint,
   DashboardAnalytics,
   DashboardStats,
   Framework,
@@ -348,6 +349,47 @@ export const promptTemplatesApi = {
 // ---- Users (reviewer assignment dropdown) ----
 export const usersApi = {
   list: () => request<{ items: User[]; total: number }>("/users"),
+};
+
+// ---- Blueprints ----
+export const blueprintApi = {
+  list: () => request<PaginatedList<Blueprint>>("/blueprints"),
+  get: (id: string) => request<Blueprint>("/blueprints/" + id),
+  create: (data: Partial<Blueprint>) => request<Blueprint>("/blueprints", { method: "POST", body: JSON.stringify(data) }),
+  generate: (id: string) => request<{ job_ids: string[] }>("/blueprints/" + id + "/generate", { method: "POST" }),
+};
+
+// ---- Knowledge Graph ----
+export interface GraphNode {
+  id: string;
+  label: string;
+  type: "topic" | "concept" | "outcome" | "keyword";
+  weight: number;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  label: "relates_to" | "prerequisite" | "supports" | "contradicts";
+  weight: number;
+}
+
+export const knowledgeGraphApi = {
+  get: (assetId: string) =>
+    request<{ nodes: GraphNode[]; edges: GraphEdge[] }>(`/knowledge/${assetId}/graph`),
+  generate: (assetId: string) =>
+    request<{ nodes: GraphNode[]; edges: GraphEdge[] }>(`/knowledge/${assetId}/graph`, {
+      method: "POST",
+    }),
+};
+
+// ---- Batches ----
+export const batchApi = {
+  list: () => request<PaginatedList<Batch>>("/batches"),
+  get: (id: string) => request<Batch>("/batches/" + id),
+  create: (data: { name: string; description?: string; framework_id?: string }) => request<Batch>("/batches", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<Batch>) => request<Batch>("/batches/" + id, { method: "PATCH", body: JSON.stringify(data) }),
+  rerunRejected: (id: string) => request<{ job_ids: string[] }>("/batches/" + id + "/rerun-rejected", { method: "POST" }),
 };
 
 export { ApiError };

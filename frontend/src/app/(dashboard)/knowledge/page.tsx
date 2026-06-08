@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CARD } from "@/components/ui/card";
 import { PageHeader, EmptyState, FileUploadZone } from "@/components/ui/index";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { knowledgeApi } from "@/lib/api";
+import { knowledgeApi, knowledgeGraphApi } from "@/lib/api";
+import type { GraphNode, GraphEdge } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
 import { DetailPanel, useDetailPanel } from "@/components/ui/detail-panel";
 import { Tag } from "@/components/ui/badge";
@@ -20,6 +21,7 @@ import {
   Database,
   ChevronRight,
   ChevronDown,
+  GitFork,
 } from "lucide-react";
 
 type DisplayStatus = "indexed" | "processing" | "failed";
@@ -143,6 +145,197 @@ function TopicTree({ nodes }: { nodes: TopicNode[] }) {
         <TopicTreeNode key={n.key} node={n} depth={0} />
       ))}
     </ul>
+  );
+}
+
+// ── Concept Graph ─────────────────────────────────────────────────────────────
+
+const NODE_TYPE_COLORS: Record<string, { fill: string; stroke: string; label: string }> = {
+  topic:   { fill: "#6366f1", stroke: "#4f46e5", label: "Topic" },
+  concept: { fill: "#8b5cf6", stroke: "#7c3aed", label: "Concept" },
+  outcome: { fill: "#10b981", stroke: "#059669", label: "Outcome" },
+  keyword: { fill: "#78716c", stroke: "#57534e", label: "Keyword" },
+};
+
+function weightToRadius(w: number): number {
+  // weight 1–5 → radius 14–28
+  return 14 + (Math.max(1, Math.min(5, w)) - 1) * 3.5;
+}
+
+interface GraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+function ConceptGraphSVG({ graph }: { graph: GraphData }) {
+  const { nodes, edges } = graph;
+  const count = nodes.length;
+  const W = 560;
+  const H = 440;
+  const cx = W / 2;
+  const cy = H / 2;
+  const R = Math.min(cx, cy) - 50;
+
+  // Place nodes in a circle
+  const positions: Record<string, { x: number; y: number }> = {};
+  nodes.forEach((n, i) => {
+    const angle = (2 * Math.PI * i) / (count || 1) - Math.PI / 2;
+    positions[n.id] = {
+      x: cx + R * Math.cos(angle),
+      y: cy + R * Math.sin(angle),
+    };
+  });
+
+  return (
+    <div className="overflow-auto rounded-xl border border-stone-100 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.02]">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width={W}
+        height={H}
+        xmlns="http://www.w3.org/2000/svg"
+        className="block"
+      >
+        {/* Edges */}
+        {edges.map((e, i) => {
+          const src = positions[e.source];
+          const tgt = positions[e.target];
+          if (!src || !tgt) return null;
+          return (
+            <line
+              key={i}
+              x1={src.x}
+              y1={src.y}
+              x2={tgt.x}
+              y2={tgt.y}
+              stroke="#d1d5db"
+              strokeWidth={Math.max(0.5, e.weight * 2)}
+              strokeOpacity={0.7}
+            >
+              <title>{e.label}</title>
+            </line>
+          );
+        })}
+        {/* Nodes */}
+        {nodes.map((n) => {
+          const pos = positions[n.id];
+          if (!pos) return null;
+          const r = weightToRadius(n.weight);
+          const col = NODE_TYPE_COLORS[n.type] ?? NODE_TYPE_COLORS.keyword;
+          const truncated = n.label.length > 20 ? n.label.slice(0, 19) + "…" : n.label;
+          return (
+            <g key={n.id}>
+              <circle
+                cx={pos.x}
+                cy={pos.y}
+                r={r}
+                fill={col.fill}
+                stroke={col.stroke}
+                strokeWidth={1.5}
+                opacity={0.9}
+              />
+              <text
+                x={pos.x}
+                y={pos.y + r + 13}
+                textAnchor="middle"
+                fontSize={10}
+                fill="#6b7280"
+                className="select-none"
+              >
+                {truncated}
+              </text>
+              <title>{n.label} ({n.type})</title>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function GraphLegend() {
+  return (
+    <div className="flex flex-wrap gap-3 mt-3">
+      {Object.entries(NODE_TYPE_COLORS).map(([type, col]) => (
+        <span key={type} className="inline-flex items-center gap-1.5 text-[11.5px] text-stone-500 dark:text-stone-400">
+          <span
+            className="inline-block w-3 h-3 rounded-full"
+            style={{ background: col.fill }}
+          />
+          {col.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function ConceptGraphTab({ assetId }: { assetId: string }) {
+  const [graph, setGraph] = useState<GraphData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Try to load cached graph on mount
+  useEffect(() => {
+    setGraph(null);
+    setError(null);
+    knowledgeGraphApi.get(assetId)
+      .then((g) => setGraph(g as GraphData))
+      .catch(() => {
+        // 404 = not generated yet, ignore
+      });
+  }, [assetId]);
+
+  const generate = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const g = await knowledgeGraphApi.generate(assetId);
+      setGraph(g as GraphData);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Generation failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-stone-400 dark:text-stone-500">
+          Concept graph
+        </p>
+        <Button
+          variant="secondary"
+          Icon={loading ? RefreshCw : GitFork}
+          onClick={generate}
+        >
+          {loading ? "Generating…" : graph ? "Regenerate" : "Generate graph"}
+        </Button>
+      </div>
+
+      {error && (
+        <p className="text-[12px] text-rose-600 dark:text-rose-400">{error}</p>
+      )}
+
+      {loading && !graph && (
+        <div className="flex items-center justify-center py-16 text-sm text-stone-400 dark:text-stone-500">
+          <RefreshCw size={16} className="animate-spin mr-2" /> Building graph…
+        </div>
+      )}
+
+      {graph && graph.nodes.length > 0 ? (
+        <>
+          <ConceptGraphSVG graph={graph} />
+          <GraphLegend />
+          <p className="text-[11.5px] text-stone-400 dark:text-stone-500">
+            {graph.nodes.length} nodes · {graph.edges.length} edges · hover edges for relationship label
+          </p>
+        </>
+      ) : !loading && !graph ? (
+        <p className="text-[12.5px] text-stone-400 dark:text-stone-500 italic">
+          No graph generated yet. Click "Generate graph" to build one from this asset's extracted knowledge.
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -358,6 +551,11 @@ export default function KnowledgePage() {
             )}
           </div>
         ),
+      },
+      {
+        id: "graph",
+        label: "Graph",
+        content: <ConceptGraphTab assetId={active.id} />,
       },
     ];
   }, [panel.active]);

@@ -442,6 +442,46 @@ function ReviewPageInner() {
                 </div>
               )}
 
+              {/* Distractor analysis — collapsible */}
+              <div className="rounded-xl border border-stone-200 dark:border-white/[0.07] mb-6 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setDistractorsOpen((v) => !v)}
+                  className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left bg-stone-50 dark:bg-white/[0.03] hover:bg-stone-100 dark:hover:bg-white/[0.05] transition"
+                >
+                  <span className="text-[12px] font-medium uppercase tracking-wide text-stone-400 dark:text-stone-500">Distractor analysis</span>
+                  {distractorsOpen ? <ChevronDown size={14} className="text-stone-400" /> : <ChevronRight size={14} className="text-stone-400" />}
+                </button>
+                {distractorsOpen && (
+                  <div className="px-4 py-3 space-y-4">
+                    {active.distractors.length === 0 ? (
+                      <p className="text-[13px] text-stone-400 dark:text-stone-500 italic">Distractor analysis not available for this item</p>
+                    ) : (
+                      active.distractors.map((d, i) => (
+                        <div key={i} className="rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50/50 dark:bg-amber-500/[0.07] p-3 space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-400 text-white text-[12px] font-semibold shrink-0">
+                              {d.option}
+                            </span>
+                            <span className="text-[13px] font-medium text-stone-800 dark:text-stone-200">Option {d.option}</span>
+                          </div>
+                          <div className="space-y-0.5 pl-8">
+                            <p className="text-[12px] font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide">Why it&apos;s wrong</p>
+                            <p className="text-[13px] text-stone-700 dark:text-stone-300 leading-snug">{d.rationale}</p>
+                          </div>
+                          <div className="pl-8">
+                            <p className="text-[12px] font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide mb-1">Misconception targeted</p>
+                            <span className="inline-block px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 text-[11.5px] font-medium border border-rose-200 dark:border-rose-500/30">
+                              {d.misconception}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="rounded-xl bg-stone-50 dark:bg-white/[0.03] border border-stone-100 dark:border-white/[0.05] p-4 mb-6">
                 <div className="flex items-center gap-1.5 text-[12px] font-medium text-stone-500 dark:text-stone-400 mb-1.5">
                   <BookOpen size={14} /> Rationale

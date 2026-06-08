@@ -40,6 +40,7 @@ class KnowledgeAsset(Base):
     extracted_concepts: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     extracted_outcomes: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     keywords: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    content_graph: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[AssetStatus] = mapped_column(Enum(AssetStatus), nullable=False, default=AssetStatus.uploaded)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
