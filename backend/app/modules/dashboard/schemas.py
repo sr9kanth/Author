@@ -32,8 +32,15 @@ class DistributionSlice(BaseModel):
     count: int
 
 
+class PipelineStage(BaseModel):
+    key: str
+    label: str
+    count: int
+
+
 class DashboardAnalytics(BaseModel):
     funnel: list[FunnelStage]
+    pipeline: list[PipelineStage]
     by_status: list[DistributionSlice]
     by_type: list[DistributionSlice]
     by_difficulty: list[DistributionSlice]

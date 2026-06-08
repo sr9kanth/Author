@@ -80,8 +80,13 @@ class GeneratedContent(Base):
     prompt_version: Mapped[str] = mapped_column(String(50), nullable=False, default="1.0")
     status: Mapped[ContentStatus] = mapped_column(Enum(ContentStatus), nullable=False, default=ContentStatus.draft)
     validation_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    assigned_reviewer_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    reviewed_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    review_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     job: Mapped[GenerationJob] = relationship("GenerationJob", back_populates="contents")
     stimulus: Mapped["Stimulus | None"] = relationship("Stimulus", back_populates="contents")
+    assigned_reviewer = relationship("User", foreign_keys=[assigned_reviewer_id])
+    reviewed_by = relationship("User", foreign_keys=[reviewed_by_id])

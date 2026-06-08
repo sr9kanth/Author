@@ -234,8 +234,15 @@ export interface DistributionSlice {
   count: number;
 }
 
+export interface PipelineStage {
+  key: string;
+  label: string;
+  count: number;
+}
+
 export interface DashboardAnalytics {
   funnel: FunnelStage[];
+  pipeline: PipelineStage[];
   by_status: DistributionSlice[];
   by_type: DistributionSlice[];
   by_difficulty: DistributionSlice[];

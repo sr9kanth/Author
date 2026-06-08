@@ -8,6 +8,7 @@ from app.modules.dashboard.schemas import (
     DashboardStats,
     DistributionSlice,
     FunnelStage,
+    PipelineStage,
 )
 from app.modules.frameworks.models import Framework
 from app.modules.generation.models import ContentStatus, GeneratedContent
@@ -130,6 +131,45 @@ class DashboardService:
             ),
         ]
 
+        # Pipeline: specific stages for the horizontal funnel strip
+        # generated -> created, reviewed (validated) -> viewed,
+        # draft -> refining, under_review -> in_review,
+        # approved+published -> accepted, archived -> rejected
+        pipeline = [
+            PipelineStage(
+                key="created",
+                label="Created",
+                count=status_counts.get(ContentStatus.generated.value, 0)
+                + status_counts.get(ContentStatus.draft.value, 0),
+            ),
+            PipelineStage(
+                key="viewed",
+                label="Viewed",
+                count=status_counts.get(ContentStatus.validated.value, 0),
+            ),
+            PipelineStage(
+                key="refining",
+                label="Refining",
+                count=status_counts.get(ContentStatus.draft.value, 0),
+            ),
+            PipelineStage(
+                key="in_review",
+                label="In Review",
+                count=status_counts.get(ContentStatus.under_review.value, 0),
+            ),
+            PipelineStage(
+                key="accepted",
+                label="Accepted",
+                count=status_counts.get(ContentStatus.approved.value, 0)
+                + status_counts.get(ContentStatus.published.value, 0),
+            ),
+            PipelineStage(
+                key="rejected",
+                label="Rejected",
+                count=status_counts.get(ContentStatus.archived.value, 0),
+            ),
+        ]
+
         by_status = [
             DistributionSlice(label=k, count=v)
             for k, v in sorted(status_counts.items(), key=lambda i: i[1], reverse=True)
@@ -145,6 +185,7 @@ class DashboardService:
 
         return DashboardAnalytics(
             funnel=funnel,
+            pipeline=pipeline,
             by_status=by_status,
             by_type=by_type,
             by_difficulty=by_difficulty,
