@@ -173,10 +173,11 @@ function ReviewPageInner() {
     try {
       // Persist review comment and reviewed_by alongside approval
       await generationApi.updateContent(id, {
+        status: "approved",
         reviewed_by_id: currentUser?.id ?? null,
         review_comment: reviewComment || null,
       });
-      await workflowApi.transition(id, "approved");
+      try { await workflowApi.transition(id, "approved"); } catch { /* workflow record optional */ }
       try {
         await repositoryApi.create({ content_id: id });
       } catch (e) {
@@ -199,10 +200,11 @@ function ReviewPageInner() {
     const id = active.id;
     try {
       await generationApi.updateContent(id, {
+        status: "rejected",
         reviewed_by_id: currentUser?.id ?? null,
         review_comment: reviewComment || null,
       });
-      await workflowApi.transition(id, "draft", "Sent back for revision");
+      try { await workflowApi.transition(id, "draft", "Sent back for revision"); } catch { /* workflow record optional */ }
       setStatus(id, "draft");
       setItems((arr) => arr.map((i) => (i.id === id ? { ...i, reviewedById: currentUser?.id ?? null, reviewComment: reviewComment || null } : i)));
       notify("Sent back to draft");
