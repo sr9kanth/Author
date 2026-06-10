@@ -62,17 +62,35 @@ Next.js 14  →  /api/proxy/*  →  FastAPI backend  →  PostgreSQL + pgvector
 - **Frameworks** — competency framework hierarchy with Item Authoring Guides injected into
   generation prompts
 - **Generation** — create jobs with inline params (question type, difficulty, cognitive
-  level, reading level, instructions); pick knowledge sources and an optional stimulus
+  level, reading level, instructions); pick knowledge sources (with a warning when none
+  are selected — general-knowledge-only mode) and an optional stimulus so all questions
+  are grounded in it; per-framework Item Authoring Guides injected into the system prompt
 - **Review** — split-panel approve/reject UI with status filters; stimulus callout shown
-  above linked questions
-- **Repository** — approved item bank with Bloom/difficulty metadata; CSV import
+  above linked questions; reviewer assignment with a "My queue" filter; separation of
+  duties (authors cannot approve/reject their own questions); review comments saved with
+  decisions; distractor analysis panel (per-wrong-option rationale + misconception
+  targeted)
+- **Repository** — approved item bank with Bloom/difficulty metadata; full-text search +
+  difficulty/type/cognitive-level filters with live result count; CSV import with
+  downloadable template; QTI 2.1 XML export of approved items
 - **Stimuli** — shared passages / case studies linked to generation jobs and review items
+- **Prompts (prompt governance)** — versioned prompt templates (generation / quality /
+  framework_alignment); activate/deactivate, duplicate; the active template overrides the
+  hardcoded generation prompt with fallback
+- **Blueprint** — coverage targets (topic × type × difficulty × cognitive level × count),
+  gap analysis against approved items, "generate to fill gaps" creating jobs per gap
+- **Batches** — named batches grouping generation jobs, batch stats
+  (approved/rejected/pending), re-run rejected items
 - **Metadata dimensions** — admin-configurable custom fields (single/multi select, text,
-  number) rendered in the review panel
+  number; scopes; dictionary values) rendered in the review panel
 - **Settings** — Fernet-encrypted API key storage; only providers with a stored key appear
   active in the model selector
-- **Dashboard** — stats cards (frameworks, items generated, awaiting review, approval rate)
-  + activity feed
+- **Dashboard** — pipeline funnel strip (Created → Viewed → Refining → In Review →
+  Accepted → Rejected); donut charts by status, type, and difficulty; token usage tracking
+  (input/output tokens + cost per job, totals and averages); stats cards + activity feed
+- **Knowledge intelligence** — hierarchical numbered topic tree per asset with Gen badges;
+  detail panel tabs (Content / Sources / Keywords / Graph); AI-generated concept graph per
+  asset (SVG node/edge visualization, cached per asset)
 
 ## Running Tests
 
@@ -83,42 +101,6 @@ pytest tests/test_security.py -v        # DB-free auth/bcrypt unit tests
 ```
 
 ## Detailed Documentation
-
-```
-┌─────────────────────────────────────────────────────┐
-│                  Next.js Frontend                   │
-│ Dashboard │ Knowledge │ Generate │ Review │ Assembly │
-│ Stimuli │ Prompts │ Blueprint │ Batches │ Metadata   │
-└─────────────────────┬───────────────────────────────┘
-                      │ REST API
-┌─────────────────────▼───────────────────────────────┐
-│                FastAPI Backend                      │
-│  auth │ knowledge │ frameworks │ generation │ quality│
-│  orchestration │ workflow │ repository │ assembly   │
-└─────────┬──────────────────────────┬────────────────┘
-          │ SQLAlchemy async         │ LiteLLM
-┌─────────▼──────┐          ┌────────▼────────────────┐
-│  PostgreSQL 16  │          │  Claude / OpenAI /       │
-│  + pgvector     │          │  Gemini / Ollama         │
-└────────────────┘          └─────────────────────────┘
-          │ Celery tasks
-┌─────────▼──────┐          ┌─────────────────────────┐
-│     Redis 7    │          │  MinIO (S3-compatible)   │
-└────────────────┘          └─────────────────────────┘
-```
-
-## Module Reference
-
-- **auth** – User registration, JWT login/refresh, role-based access
-- **knowledge** – Document upload, S3 storage, AI-powered content extraction
-- **frameworks** – Competency framework hierarchy (Framework → Domain → Competency → Skill → LearningOutcome)
-- **assessment_config** – Question type mix, difficulty, and cognitive level configuration
-- **generation** – AI generation jobs dispatched via Celery
-- **orchestration** – LiteLLM wrapper with failover, cost tracking, and multi-provider support
-- **quality** – 10 validator classes (grammar, bias, ambiguity, hallucination, etc.)
-- **workflow** – State machine (draft → generated → validated → under_review → approved → published → archived)
-- **repository** – Published item library
-- **assembly** – Final assessment package assembly and export
 
 See [HANDOVER.md](HANDOVER.md) for:
 - Full architecture and repository structure

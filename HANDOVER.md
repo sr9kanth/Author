@@ -10,7 +10,8 @@
 
 The platform is **fully operational locally via Docker Compose**. All core features are
 working end-to-end: auth, knowledge ingestion, AI generation, review workflow, repository,
-stimuli, metadata dimensions, settings/LLM key management, and the dashboard.
+stimuli, prompt governance, blueprint coverage/gap analysis, batches, metadata dimensions,
+settings/LLM key management, and the dashboard.
 
 Run it with:
 
@@ -34,14 +35,15 @@ docker compose up --build
 ┌──────────────────────────────────────────────────────────┐
 │                    Next.js 14 Frontend                   │
 │  Dashboard │ Knowledge │ Frameworks │ Generate │ Review  │
-│  Repository │ Stimuli │ Metadata │ Settings              │
+│  Repository │ Stimuli │ Prompts │ Blueprint │ Batches    │
+│  Metadata │ Settings                                     │
 └──────────────────────┬───────────────────────────────────┘
                        │ /api/proxy/* (same-origin Route Handler)
 ┌──────────────────────▼───────────────────────────────────┐
 │                   FastAPI Backend                        │
 │  auth │ knowledge │ frameworks │ generation │ quality    │
-│  workflow │ repository │ stimuli │ metadata │ settings   │
-│  orchestration │ assembly                               │
+│  workflow │ repository │ stimuli │ prompts │ blueprint   │
+│  batches │ metadata │ settings │ orchestration │ assembly│
 └──────────┬────────────────────────────┬─────────────────┘
            │ SQLAlchemy 2.0 async        │ LiteLLM
 ┌──────────▼──────────┐       ┌─────────▼───────────────────┐
@@ -60,8 +62,10 @@ All API calls go through the same-origin proxy Route Handler at
 **request time** (not at Next.js build time), so the backend URL can be changed without
 rebuilding the frontend image.
 
-**Migrations**: `backend/start.sh` runs `alembic upgrade head` on every boot. Migrations
-`0001`–`0007` are all idempotent-guarded. Never need to run them manually in normal usage.
+**Migrations**: `backend/start.sh` runs `alembic upgrade head` on every boot. All
+migrations are idempotent-guarded. The chain is now linear:
+`0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 → 0007b → 0008 → 0008b → 0010`
+(duplicate revision IDs were linearized). Never need to run them manually in normal usage.
 
 ---
 
@@ -83,8 +87,11 @@ Author/
 │   │   │   ├── generation/                # AI generation jobs + generated content
 │   │   │   ├── quality/                   # Quality validation engine
 │   │   │   ├── workflow/                  # Review state machine
-│   │   │   ├── repository/                # Approved item repository + CSV import
+│   │   │   ├── repository/                # Approved items + search + CSV import + QTI export
 │   │   │   ├── stimuli/                   # Shared passages / case studies
+│   │   │   ├── prompts/                   # Versioned prompt templates (prompt governance)
+│   │   │   ├── blueprint/                 # Coverage targets + gap analysis
+│   │   │   ├── batches/                   # Named batches of generation jobs
 │   │   │   ├── metadata/                  # Custom metadata dimension admin
 │   │   │   ├── settings/                  # App settings + encrypted LLM API keys
 │   │   │   ├── assembly/                  # Assessment package assembly
@@ -95,7 +102,7 @@ Author/
 │   │       ├── celery_app.py              # Celery configuration
 │   │       └── tasks.py                   # Celery tasks (knowledge, generation, quality)
 │   ├── alembic/
-│   │   └── versions/                      # Migrations 0001–0007
+│   │   └── versions/                      # Migrations 0001 … 0010 (linear chain)
 │   ├── start.sh                           # Runs alembic upgrade head then uvicorn
 │   └── requirements.txt
 │
@@ -112,8 +119,11 @@ Author/
 │       │       ├── frameworks/            # Framework CRUD + Item Authoring Guides UI
 │       │       ├── generate/              # Generation job form + progress polling
 │       │       ├── review/                # Split-panel review UI
-│       │       ├── repository/            # Item bank + CSV import
+│       │       ├── repository/            # Item bank + search/filters + CSV import + QTI export
 │       │       ├── stimuli/               # Stimuli CRUD page
+│       │       ├── prompts/               # Prompt template governance page
+│       │       ├── blueprint/             # Coverage targets + gap analysis page
+│       │       ├── batches/               # Generation job batches page
 │       │       ├── metadata/              # Metadata dimension admin
 │       │       └── settings/              # API key management
 │       ├── components/
@@ -151,6 +161,10 @@ Author/
   3. Returns all assets as fallback
 - Knowledge page auto-polls while assets are in `processing` state
 - Sidebar shows real storage usage (fetches actual `file_size` totals from the backend)
+- **Hierarchical numbered topic tree** per asset with Gen badges
+- Detail panel tabs: **Content** (topic tree) / **Sources** / **Keywords** / **Graph**
+- **AI-generated concept graph** per asset — nodes/edges SVG visualization, cached in the
+  `content_graph` column
 
 ### Frameworks
 - CRUD for competency frameworks (Framework → Domain → Competency → Skill → LearningOutcome)
@@ -163,7 +177,8 @@ Author/
   required:
   - `framework_id`, `question_count`, `question_types`, `difficulty_levels`,
     `cognitive_levels`, `reading_level`, `instructions`
-- **Knowledge source picker**: select which indexed documents ground the questions
+- **Knowledge source picker**: select which indexed documents ground the questions; a
+  warning is shown when none are selected (general-knowledge-only mode)
 - **Stimulus / scenario picker**: link a shared passage or case study to the job; all
   generated questions reference it
 - **AI model selector**: only models with a configured API key are shown as active; others
@@ -172,6 +187,10 @@ Author/
 - Real progress polling with 3-minute timeout; error reason surfaced to the UI on failure
 - Reliability: weighted quality scoring, LLM validators, circuit breaker, 3-attempt
   exponential-backoff retry logic
+- Active prompt template (Prompts module) overrides the hardcoded generation prompt, with
+  fallback to the hardcoded one
+- Token usage tracked per job: `input_tokens`, `output_tokens`, `cost_usd` on
+  `generation_jobs`
 - JSON fence stripping + control character sanitization on all AI responses
 
 ### Review
@@ -179,15 +198,40 @@ Author/
 - Status filters: All / New / Validated / Done
 - Stimulus callout shown above any question linked to a stimulus
 - Approve / reject per question via `PATCH /generation/contents/{id}`
+- **Reviewer assignment**: assign questions to specific reviewers; "My queue" filter
+- **Separation of duties**: authors cannot approve/reject their own questions — backend
+  returns 403, UI disables the buttons and shows a warning
+- **Review comments** saved with approve/reject (`review_comment`, `reviewed_by_id`)
+- **Distractor analysis panel**: per-wrong-option rationale + the misconception targeted
+- Approve sets the content status correctly; the workflow transition is optional (no more
+  "Workflow not found" errors)
 
 ### Repository
 - Approved items list with Bloom's taxonomy level and difficulty metadata visible
 - **CSV question bank import** with in-browser template download
+- **QTI 2.1 XML export** of approved items
+- **Full-text search** + filters (difficulty, type, cognitive level) with live result count
 
 ### Stimuli
 - Full CRUD for scenario / passage / case-study stimuli (`/stimuli` endpoints)
 - Link a stimulus to a generation job so all questions reference it
 - Dedicated Stimuli page + sidebar navigation entry
+
+### Prompts (Prompt Governance)
+- Versioned prompt templates with types: `generation`, `quality`, `framework_alignment`
+- Activate / deactivate / duplicate templates
+- The active template overrides the hardcoded prompt in the generation agent, falling back
+  to the hardcoded prompt when none is active
+
+### Blueprint
+- Define coverage targets: topic × type × difficulty × cognitive level × count
+- Gap analysis against approved items
+- "Generate to fill gaps" — creates one generation job per gap
+
+### Batches
+- Named batches grouping generation jobs
+- Batch stats: approved / rejected / pending
+- Re-run rejected items
 
 ### Metadata Dimensions
 - Admin configurator for custom question metadata dimensions
@@ -203,6 +247,9 @@ Author/
 
 ### Dashboard
 - Stats cards: active frameworks, items generated, awaiting review, approval rate
+- **Pipeline funnel strip**: Created → Viewed → Refining → In Review → Accepted → Rejected
+- **Three donut charts**: by status, by type, by difficulty
+- **Token usage**: input/output tokens + cost per job, with totals and averages
 - Activity feed of recent events
 
 ---
@@ -239,7 +286,10 @@ Includes sub-routes for Item Authoring Guides (`/frameworks/{id}/guides`).
 | GET | `/jobs` | List jobs |
 | GET | `/jobs/{job_id}` | Get job + status |
 | GET | `/jobs/{job_id}/contents` | List generated content for job |
-| PATCH | `/contents/{content_id}` | Approve / reject / edit content |
+| PATCH | `/contents/{content_id}` | Approve / reject / edit content (403 if author self-reviews; saves review comment) |
+
+`generation_jobs` now carries `stimulus_id`, `input_tokens`, `output_tokens`, `cost_usd`.
+`generated_contents` now carries `assigned_reviewer_id`, `reviewed_by_id`, `review_comment`.
 
 ### Stimuli — `/api/v1/stimuli`
 | Method | Path | Description |
@@ -249,6 +299,17 @@ Includes sub-routes for Item Authoring Guides (`/frameworks/{id}/guides`).
 | GET | `/{stimulus_id}` | Get stimulus |
 | PATCH | `/{stimulus_id}` | Update stimulus |
 | DELETE | `/{stimulus_id}` | Delete stimulus |
+
+### Prompts — `/api/v1/prompts`
+Versioned prompt templates (`generation` / `quality` / `framework_alignment` types):
+create, list, update, activate/deactivate, duplicate, delete.
+
+### Blueprint — `/api/v1/blueprint`
+Coverage targets CRUD, gap analysis against approved items, and "generate to fill gaps"
+(creates a generation job per gap).
+
+### Batches — `/api/v1/batches`
+Batch CRUD, batch stats (approved/rejected/pending), re-run rejected items.
 
 ### Metadata — `/api/v1/metadata`
 | Method | Path | Description |
@@ -271,7 +332,10 @@ Includes sub-routes for Item Authoring Guides (`/frameworks/{id}/guides`).
 | POST | `/` | Promote content to repository |
 | GET | `/` | List repository items |
 | GET | `/{item_id}` | Get repository item |
-| POST | `/import` | CSV import of question bank items |
+| POST | `/import` | CSV import of question bank items (template downloadable in-browser) |
+| GET | `/export/qti` | QTI 2.1 XML export of approved items |
+
+Listing supports full-text search and difficulty/type/cognitive-level filters.
 
 ### Orchestration — `/api/v1/orchestration`
 | Method | Path | Description |
@@ -396,8 +460,15 @@ npm run dev
 `backend/start.sh` runs `alembic upgrade head` automatically on every boot before starting
 uvicorn. There is no need to run migrations manually in normal usage.
 
-Migrations `0001`–`0007` are all written with idempotent guards (checks for existing
-columns/tables before altering them).
+Migrations are written with idempotent guards (checks for existing columns/tables before
+altering them). The chain is linear:
+`0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 → 0007b → 0008 → 0008b → 0010`.
+
+If `alembic_version` ends up stamped ahead of the actual schema, add the missing columns
+manually, e.g.:
+```sql
+ALTER TABLE generation_jobs ADD COLUMN IF NOT EXISTS stimulus_id VARCHAR;
+```
 
 To run manually:
 ```bash
@@ -428,6 +499,20 @@ ALEMBIC_DB_URL="postgresql+asyncpg://..." alembic upgrade head
   pipeline falls back to full-text search silently. This is intentional; generation still
   works, just with less precise knowledge grounding.
 
+- **Alembic chain is linearized.** The migration chain is now
+  `0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 → 0007b → 0008 → 0008b → 0010` —
+  duplicate revision IDs that previously existed were linearized. If `alembic_version` is
+  stamped ahead of the actual schema, add missing columns manually via psql:
+  `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...`.
+
+- **JSON parser sanitizes control characters from AI responses.** DeepSeek embeds raw
+  newlines inside JSON strings; the parser strips/escapes control characters before
+  decoding.
+
+- **New columns to be aware of**: `generation_jobs` has `stimulus_id`, `input_tokens`,
+  `output_tokens`, `cost_usd`; `generated_contents` has `assigned_reviewer_id`,
+  `reviewed_by_id`, `review_comment`.
+
 - **`CORS_ORIGINS` is parsed as a raw string.** It accepts either a comma-separated list
   (`http://localhost:3000,https://example.com`) or a JSON array string. Do not rely on
   pydantic-settings auto-decoding JSON env vars for this field.
@@ -436,13 +521,16 @@ ALEMBIC_DB_URL="postgresql+asyncpg://..." alembic upgrade head
 
 ## Remaining Backlog
 
+Done since last revision: ✅ prompt governance (Prompts module), ✅ reviewer assignment +
+separation of duties, ✅ QTI 2.1 export, ✅ repository full-text search + filters,
+✅ blueprint coverage/gap analysis, ✅ batches, ✅ distractor analysis panel, ✅ concept
+graph + topic tree on knowledge assets, ✅ token usage / cost tracking.
+
 | Item | Notes |
 |------|-------|
-| Right-side detail panel / panelling | Full-screen question editor panel in review; currently basic split view |
-| Prompt governance | Version-controlled system prompts; A/B testing prompt variants |
-| Reviewer assignment / separation of duties | Assign items to specific reviewers; prevent author self-review |
-| QTI export | IMS QTI 2.1/3.0 export from repository |
-| Full-text / vector search on repository | Currently filtered by metadata only; no semantic search |
+| Prompt A/B testing | Prompt versioning exists; A/B testing of variants does not |
+| QTI 3.0 export | Only QTI 2.1 currently supported |
+| Vector / semantic search on repository | Full-text search exists; no semantic search yet |
 | RAG embedding pipeline for all providers | Embeddings currently only via OpenAI-compatible endpoint |
 | Keycloak OIDC | Stub exists in `frontend/src/lib/auth.ts`; not yet implemented |
 
