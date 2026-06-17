@@ -28,8 +28,8 @@ interface Asset {
   storagePath: string | null;
 }
 
-function labelsFrom(rec: Record<string, unknown> | null): string[] {
-  if (!rec || typeof rec !== "object") return [];
+function labelsFrom(rec: Record<string, unknown> | unknown[] | null): string[] {
+  if (!rec || typeof rec !== "object" || Array.isArray(rec)) return [];
   return Object.keys(rec);
 }
 

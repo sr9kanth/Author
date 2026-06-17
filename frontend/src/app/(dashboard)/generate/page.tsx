@@ -8,9 +8,9 @@ import { Tag } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { INPUT_CLS } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { frameworksApi, generationApi, knowledgeApi, orchestrationApi, stimuliApi } from "@/lib/api";
+import { frameworksApi, generationApi, knowledgeApi, orchestrationApi, stimuliApi, type ModelInfo } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
-import { Sparkles, ChevronDown, Check, ClipboardCheck, CheckCircle, AlertCircle, Database, X, BookOpen } from "lucide-react";
+import { Sparkles, ChevronDown, Check, ClipboardCheck, CheckCircle, AlertCircle, Database, X, BookOpen, Wifi, WifiOff } from "lucide-react";
 
 const ITEM_TYPES = ["Multiple Choice", "Short Answer", "True / False", "Numeric Response", "Extended Response"];
 const DIFFICULTY = ["Easy", "Medium", "Hard"];
@@ -47,6 +47,10 @@ export default function GeneratePage() {
 
   const { data: modelData } = useAsync(() => orchestrationApi.listModels(), []);
   const MODELS = useMemo(() => modelData ?? [], [modelData]);
+  const cloudModels = useMemo(() => MODELS.filter((m) => !m.local), [MODELS]);
+  const localModels = useMemo(() => MODELS.filter((m) => m.local), [MODELS]);
+
+  const { data: ollamaStatus } = useAsync(() => orchestrationApi.ollamaStatus(), []);
 
   const { data: kData } = useAsync(() => knowledgeApi.list(0, 200), []);
   const ASSETS = useMemo(
@@ -261,22 +265,47 @@ export default function GeneratePage() {
               })()}
             </Field>
 
-            <Field label="AI model" hint="Select the model to use for generation. Ollama models run locally.">
-              <div className="relative">
-                <select value={aiModel} onChange={(e) => setAiModel(e.target.value)} className={cn(INPUT_CLS, "appearance-none pr-10")}>
-                  <option value="">Default (system setting)</option>
-                  {MODELS.map((m) => (
-                    <option key={m.id} value={m.id} disabled={!m.key_configured}>
-                      {m.provider === "ollama"
-                        ? `🏠 ${m.id} (local)`
-                        : `${m.provider} / ${m.id}`}
-                      {!m.key_configured ? " (no key)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
+            <Field label="AI model" hint="Cloud models need a configured API key. Local models require Ollama running on this machine.">
+              <div className="space-y-2">
+                <div className="relative">
+                  <select value={aiModel} onChange={(e) => setAiModel(e.target.value)} className={cn(INPUT_CLS, "appearance-none pr-10")}>
+                    <option value="">Default (system setting)</option>
+                    {cloudModels.length > 0 && (
+                      <optgroup label="Cloud models">
+                        {cloudModels.map((m) => (
+                          <option key={m.id} value={m.id} disabled={!m.key_configured}>
+                            {m.provider} / {m.id}{!m.key_configured ? " (no key)" : ""}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {localModels.length > 0 && (
+                      <optgroup label="Local (Ollama)">
+                        {localModels.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.id}{m.size_gb ? ` (${m.size_gb} GB)` : ""}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+                  <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
+                </div>
+                {ollamaStatus && (
+                  <div className={cn(
+                    "flex items-center gap-2 text-[12px] rounded-lg px-3 py-1.5 border",
+                    ollamaStatus.reachable
+                      ? "text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800"
+                      : "text-stone-500 dark:text-stone-400 bg-stone-50 dark:bg-white/[0.04] border-stone-200 dark:border-white/10"
+                  )}>
+                    {ollamaStatus.reachable ? <Wifi size={13} /> : <WifiOff size={13} />}
+                    {ollamaStatus.reachable
+                      ? `Ollama connected · ${ollamaStatus.models.length} model${ollamaStatus.models.length !== 1 ? "s" : ""} available at ${ollamaStatus.base_url}`
+                      : `Ollama not reachable at ${ollamaStatus.base_url} — only cloud models available`}
+                  </div>
+                )}
               </div>
-              {selectedModelInfo && !selectedModelInfo.key_configured && (
+              {MODELS.find((m) => m.id === aiModel) && !MODELS.find((m) => m.id === aiModel)?.key_configured && (
                 <p className="mt-2 flex items-center gap-1.5 text-[12px] text-amber-600 dark:text-amber-400">
                   <AlertCircle size={13} className="shrink-0" />
                   No API key configured for this provider. Add keys in{" "}

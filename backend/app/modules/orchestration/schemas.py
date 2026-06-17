@@ -30,6 +30,15 @@ class ModelInfo(BaseModel):
     context_window: int
     supports_vision: bool = False
     key_configured: bool = True
+    local: bool = False
+    size_gb: float = 0.0
+
+
+class OllamaStatus(BaseModel):
+    reachable: bool
+    base_url: str
+    models: list[str]
+    error: str | None = None
 
 
 class CostEstimate(BaseModel):

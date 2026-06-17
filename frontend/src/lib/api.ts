@@ -4,6 +4,7 @@ import type {
   AssessmentConfiguration,
   AssessmentItem,
   AssessmentPackage,
+  Batch,
   Blueprint,
   DashboardAnalytics,
   DashboardStats,
@@ -314,11 +315,27 @@ export const qualityApi = {
 };
 
 // ---- Orchestration ----
+export interface ModelInfo {
+  id: string;
+  provider: string;
+  context_window: number;
+  supports_vision?: boolean;
+  local?: boolean;
+  size_gb?: number;
+  key_configured?: boolean;
+}
+
+export interface OllamaStatus {
+  reachable: boolean;
+  base_url: string;
+  models: string[];
+  error?: string;
+}
+
 export const orchestrationApi = {
-  listModels: () =>
-    request<{ id: string; provider: string; context_window: number; key_configured: boolean }[]>(
-      "/orchestration/models",
-    ),
+  listModels: () => request<ModelInfo[]>("/orchestration/models"),
+  listLocalModels: () => request<ModelInfo[]>("/orchestration/models/local"),
+  ollamaStatus: () => request<OllamaStatus>("/orchestration/ollama/status"),
 };
 
 // ---- Settings ----

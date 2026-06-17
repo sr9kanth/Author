@@ -6,6 +6,7 @@ import threading
 import time
 from typing import Any
 
+import httpx
 import litellm
 import structlog
 
@@ -55,6 +56,14 @@ class AIOrchestrationService:
             return f"{prefix}{effective_model}"
         return effective_model
 
+    def _ollama_kwargs(self, provider: str | None, model: str | None) -> dict:
+        """Return api_base kwarg when routing to Ollama so LiteLLM uses the configured host."""
+        effective_provider = provider or settings.LITELLM_DEFAULT_PROVIDER
+        effective_model = model or settings.LITELLM_DEFAULT_MODEL
+        if effective_provider == "ollama" or effective_model.startswith("ollama/"):
+            return {"api_base": settings.OLLAMA_BASE_URL}
+        return {}
+
     async def complete(
         self,
         messages: list[dict[str, str]],
@@ -81,6 +90,7 @@ class AIOrchestrationService:
         model_string = self._build_model_string(model, provider)
         effective_provider = provider or settings.LITELLM_DEFAULT_PROVIDER
         kwargs.setdefault("timeout", settings.AI_REQUEST_TIMEOUT)
+        kwargs.update(self._ollama_kwargs(provider, model))
 
         # Circuit-breaker check
         with _circuit_lock:
@@ -180,17 +190,50 @@ class AIOrchestrationService:
         last_exc: Exception | None = None
         kwargs.setdefault("timeout", settings.AI_REQUEST_TIMEOUT)
         for model_string in models:
+            provider = "ollama" if model_string.startswith("ollama/") else None
+            extra = self._ollama_kwargs(provider, model_string)
             try:
-                response = await litellm.acompletion(model=model_string, messages=messages, **kwargs)
+                response = await litellm.acompletion(model=model_string, messages=messages, **extra, **kwargs)
                 return response.choices[0].message.content or ""
             except Exception as exc:
                 logger.warning("ai_fallback_attempt_failed", model=model_string, error=str(exc))
                 last_exc = exc
         raise RuntimeError(f"All model fallbacks exhausted. Last error: {last_exc}")
 
+    _CLOUD_MODELS: list[dict] = [
+        {"id": "claude-opus-4-8", "provider": "anthropic", "context_window": 200000},
+        {"id": "claude-sonnet-4-6", "provider": "anthropic", "context_window": 200000},
+        {"id": "claude-haiku-4-5", "provider": "anthropic", "context_window": 200000},
+        {"id": "gpt-4o", "provider": "openai", "context_window": 128000},
+        {"id": "gpt-4o-mini", "provider": "openai", "context_window": 128000},
+        {"id": "gemini-1.5-pro", "provider": "gemini", "context_window": 1000000},
+        {"id": "gemini-1.5-flash", "provider": "gemini", "context_window": 1000000},
+        {"id": "deepseek-chat", "provider": "deepseek", "context_window": 128000},
+        {"id": "deepseek-reasoner", "provider": "deepseek", "context_window": 128000},
+    ]
+
+    async def _fetch_ollama_models(self) -> list[dict]:
+        """Query Ollama /api/tags to discover locally pulled models."""
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(f"{settings.OLLAMA_BASE_URL}/api/tags")
+                resp.raise_for_status()
+                data = resp.json()
+                return [
+                    {
+                        "id": m["name"],
+                        "provider": "ollama",
+                        "context_window": 128000,
+                        "local": True,
+                        "size_gb": round(m.get("size", 0) / 1e9, 1),
+                    }
+                    for m in data.get("models", [])
+                ]
+        except Exception as exc:
+            logger.info("ollama_unreachable", url=settings.OLLAMA_BASE_URL, error=str(exc))
+            return []
+
     async def get_available_models(self) -> list[dict]:
-        # Check which provider keys are configured (env var takes precedence over settings
-        # so that runtime updates via the settings API are reflected immediately).
         def _key_set(env_var: str, settings_val: str) -> bool:
             return bool(os.environ.get(env_var) or settings_val)
 
@@ -199,28 +242,25 @@ class AIOrchestrationService:
             "openai": _key_set("OPENAI_API_KEY", settings.OPENAI_API_KEY),
             "gemini": _key_set("GEMINI_API_KEY", settings.GEMINI_API_KEY),
             "deepseek": _key_set("DEEPSEEK_API_KEY", settings.DEEPSEEK_API_KEY),
-            # Ollama needs no key, but it's only usable if a local server is
-            # actually running and reachable. Gate it behind OLLAMA_ENABLED so
-            # it isn't presented as an available fallback (and silently
-            # auto-selected) when no Ollama is up — which fails with
-            # "Cannot connect to host localhost:11434".
-            "ollama": settings.OLLAMA_ENABLED,
+            "ollama": True,  # Ollama needs no key; reachability shown via /ollama/status
         }
 
-        raw_models = [
-            {"id": "claude-opus-4-8", "provider": "anthropic", "context_window": 200000},
-            {"id": "claude-sonnet-4-5", "provider": "anthropic", "context_window": 200000},
-            {"id": "gpt-4o", "provider": "openai", "context_window": 128000},
-            {"id": "gpt-4o-mini", "provider": "openai", "context_window": 128000},
-            {"id": "gemini-1.5-pro", "provider": "gemini", "context_window": 1000000},
-            {"id": "gemini-1.5-flash", "provider": "gemini", "context_window": 1000000},
-            {"id": "deepseek-chat", "provider": "deepseek", "context_window": 128000},
-            {"id": "deepseek-reasoner", "provider": "deepseek", "context_window": 128000},
-            {"id": "llama3.2", "provider": "ollama", "context_window": 128000},
-        ]
-
-        models = [
+        cloud_with_keys = [
             {**m, "key_configured": provider_key_configured.get(m["provider"], False)}
-            for m in raw_models
+            for m in self._CLOUD_MODELS
         ]
-        return models
+        local_models = await self._fetch_ollama_models()
+        local_with_keys = [{**m, "key_configured": True} for m in local_models]
+        return [*cloud_with_keys, *local_with_keys]
+
+    async def get_ollama_status(self) -> dict:
+        """Return Ollama reachability + pulled model list."""
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(f"{settings.OLLAMA_BASE_URL}/api/tags")
+                resp.raise_for_status()
+                data = resp.json()
+                models = [m["name"] for m in data.get("models", [])]
+                return {"reachable": True, "base_url": settings.OLLAMA_BASE_URL, "models": models}
+        except Exception as exc:
+            return {"reachable": False, "base_url": settings.OLLAMA_BASE_URL, "models": [], "error": str(exc)}

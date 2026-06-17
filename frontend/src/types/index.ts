@@ -168,12 +168,12 @@ export interface GeneratedContent {
   prompt_version: string;
   status: ContentStatus;
   validation_score: number | null;
-  assigned_reviewer_id: string | null;
-  reviewed_by_id: string | null;
-  review_comment: string | null;
+  assigned_reviewer_id?: string | null;
+  reviewed_by_id?: string | null;
+  review_comment?: string | null;
+  stimulus?: Stimulus | null;
   created_at: string;
   updated_at: string;
-  stimulus?: Stimulus | null;
 }
 
 export interface ValidationResult {
@@ -251,22 +251,30 @@ export interface DashboardAnalytics {
   by_difficulty: DistributionSlice[];
 }
 
+// ---- Guides ----
 export interface Guide {
   id: string;
+  framework_id: string | null;
   title: string;
   body: string;
-  framework_id: string | null;
   is_active: boolean;
-  created_by: string;
+  created_by?: string;
   created_at: string;
   updated_at: string;
 }
 
-export type MetadataDimensionValueType = "dictionary_single" | "dictionary_multi" | "text" | "number";
+// ---- Metadata dimensions ----
+export type MetadataDimensionValueType =
+  | "dictionary_single"
+  | "dictionary_multi"
+  | "text"
+  | "number";
 
 export interface MetadataValue {
+  id?: string;
   value: string;
   display_title: string;
+  sort_order?: number;
 }
 
 export interface MetadataDimension {
@@ -274,13 +282,13 @@ export interface MetadataDimension {
   name: string;
   key: string;
   value_type: MetadataDimensionValueType;
-  dimension_values: unknown[];
   explanation: string | null;
+  dimension_values: MetadataValue[];
   scopes: string[];
   source: "defined" | "library";
   is_active: boolean;
   sort_order: number;
-  created_by: string;
+  created_by?: string;
   created_at: string;
   updated_at: string;
 }
@@ -312,6 +320,38 @@ export interface PromptTemplate {
   user_template: string;
   is_active: boolean;
   notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// ---- Blueprint ----
+export interface BlueprintItem {
+  question_type: string;
+  difficulty: string;
+  count: number;
+  topic?: string;
+}
+
+export interface Blueprint {
+  id: string;
+  name: string;
+  description: string | null;
+  framework_id: string | null;
+  items: BlueprintItem[];
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// ---- Batch ----
+export interface Batch {
+  id: string;
+  name: string;
+  description: string | null;
+  framework_id: string | null;
+  status: string;
+  job_ids: string[];
   created_by: string;
   created_at: string;
   updated_at: string;

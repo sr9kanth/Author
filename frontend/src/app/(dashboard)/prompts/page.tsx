@@ -157,14 +157,13 @@ export default function PromptsPage() {
     <div className="flex flex-col gap-6 p-6 max-w-7xl mx-auto w-full">
       <PageHeader
         title="Prompt Templates"
-        subtitle={`${total} template${total !== 1 ? "s" : ""} — manage versioned prompts for AI generation`}
-        action={
-          <Button onClick={() => { setForm(EMPTY_FORM); setShowForm(true); setFormError(""); }}>
-            <Plus size={16} className="mr-1.5" />
-            New template
-          </Button>
-        }
-      />
+        description={`${total} template${total !== 1 ? "s" : ""} — manage versioned prompts for AI generation`}
+      >
+        <Button onClick={() => { setForm(EMPTY_FORM); setShowForm(true); setFormError(""); }}>
+          <Plus size={16} className="mr-1.5" />
+          New template
+        </Button>
+      </PageHeader>
 
       {/* Filter bar */}
       <div className="flex gap-2">
