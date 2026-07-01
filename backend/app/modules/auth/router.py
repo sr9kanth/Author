@@ -1,12 +1,46 @@
 from fastapi import APIRouter, HTTPException, Request, status
+from pydantic import BaseModel
 
+from app.core.config import settings
 from app.core.deps import CurrentUserID, DBSession
-from app.core.security import decode_token
+from app.core.security import decode_token, hash_password
 from app.modules.audit.service import AuditService
+from app.modules.auth.models import User
 from app.modules.auth.schemas import LoginRequest, RefreshRequest, TokenResponse, UserCreate, UserRead, UserUpdate
 from app.modules.auth.service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+class AdminResetPasswordRequest(BaseModel):
+    email: str
+    new_password: str
+    secret: str
+
+
+@router.post("/admin-reset-password", status_code=status.HTTP_204_NO_CONTENT)
+async def admin_reset_password(data: AdminResetPasswordRequest, db: DBSession) -> None:
+    """Reset a user's password given the ADMIN_RESET_SECRET shared secret.
+
+    Disabled (404) unless ADMIN_RESET_SECRET is set in the environment. This
+    is a break-glass tool for recovering account access without shell/CLI
+    access to the deployment — set the secret in your host's env vars, call
+    this once, then unset it.
+    """
+    if not settings.ADMIN_RESET_SECRET:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if data.secret != settings.ADMIN_RESET_SECRET:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid secret")
+
+    from sqlalchemy import select
+
+    result = await db.execute(select(User).where(User.email == data.email))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    user.hashed_password = hash_password(data.new_password)
+    await db.commit()
 
 
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)

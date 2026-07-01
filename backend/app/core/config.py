@@ -18,6 +18,10 @@ class Settings(BaseSettings):
             return v.replace("postgresql://", "postgresql+asyncpg://", 1)
         return v
     SECRET_KEY: str = "changeme-use-openssl-rand-hex-32"
+    # Optional shared secret that unlocks POST /auth/admin-reset-password.
+    # Unset (default) disables the endpoint entirely — set it temporarily in
+    # Railway's Variables tab, use the endpoint once, then unset it.
+    ADMIN_RESET_SECRET: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
