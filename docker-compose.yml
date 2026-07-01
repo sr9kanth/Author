@@ -61,7 +61,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     ports:
-      - "8000:8000"
+      - "8001:8000"
     env_file:
       # NOTE: If LITELLM_DEFAULT_PROVIDER=deepseek (the default), you must set
       # DEEPSEEK_API_KEY in your .env file — generation will always fail without it.
@@ -123,7 +123,7 @@ services:
       BACKEND_URL: http://backend:8000
       # NEXT_PUBLIC_API_URL: baked into the browser bundle at build time.
       # Keep as localhost so direct browser→backend calls also work locally.
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_API_URL: http://localhost:8001
     depends_on:
       - backend
 
