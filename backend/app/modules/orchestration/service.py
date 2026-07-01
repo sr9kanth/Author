@@ -48,10 +48,17 @@ class AIOrchestrationService:
             "anthropic": "anthropic/",
             "openai": "",
             "gemini": "gemini/",
-            "ollama": "ollama/",
+            # "ollama_chat/" (not "ollama/") routes through Ollama's /api/chat
+            # endpoint, which handles system+user messages correctly. The
+            # older "ollama/" provider flattens messages into a single raw
+            # prompt via /api/generate, which trips up chat-tuned models
+            # (e.g. deepseek-r1) and can return a bare 500 from Ollama.
+            "ollama": "ollama_chat/",
             "deepseek": "deepseek/",
         }
         prefix = provider_prefixes.get(effective_provider, "")
+        if effective_model.startswith("ollama/"):
+            effective_model = "ollama_chat/" + effective_model[len("ollama/"):]
         if prefix and not effective_model.startswith(prefix):
             return f"{prefix}{effective_model}"
         return effective_model
@@ -60,7 +67,11 @@ class AIOrchestrationService:
         """Return api_base kwarg when routing to Ollama so LiteLLM uses the configured host."""
         effective_provider = provider or settings.LITELLM_DEFAULT_PROVIDER
         effective_model = model or settings.LITELLM_DEFAULT_MODEL
-        if effective_provider == "ollama" or effective_model.startswith("ollama/"):
+        if (
+            effective_provider == "ollama"
+            or effective_model.startswith("ollama/")
+            or effective_model.startswith("ollama_chat/")
+        ):
             return {"api_base": settings.OLLAMA_BASE_URL}
         return {}
 
@@ -190,7 +201,7 @@ class AIOrchestrationService:
         last_exc: Exception | None = None
         kwargs.setdefault("timeout", settings.AI_REQUEST_TIMEOUT)
         for model_string in models:
-            provider = "ollama" if model_string.startswith("ollama/") else None
+            provider = "ollama" if model_string.startswith(("ollama/", "ollama_chat/")) else None
             extra = self._ollama_kwargs(provider, model_string)
             try:
                 response = await litellm.acompletion(model=model_string, messages=messages, **extra, **kwargs)
